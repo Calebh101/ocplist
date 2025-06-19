@@ -1,5 +1,5 @@
-import 'package:ocplist/ocplist.dart' as ocplist;
+import 'package:ocplist/ocplist.dart';
 
 void main(List<String> arguments) {
-  ocplist.main(arguments);
+  ocplistcli(arguments);
 }

@@ -410,7 +410,7 @@ packages:
     source: hosted
     version: "1.2.1"
   xml:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: xml
       sha256: "3202a47961c1a0af6097c9f8c1b492d705248ba309e6f7a72410422c05046851"
