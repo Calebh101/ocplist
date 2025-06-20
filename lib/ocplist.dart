@@ -1,4 +1,4 @@
 library;
 
-export 'src/main.dart' show ocplist, ocplistcli;
+export 'src/plist.dart' show gui, cli, isLocked;
 export 'src/classes.dart';

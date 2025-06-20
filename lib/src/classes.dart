@@ -15,15 +15,19 @@ class Plist {
   String raw;
   Map json;
   Plist({required this.raw, required this.json});
+
+  Map operator [](String key) {
+    return json[key];
+  }
 }
 
 class UnsupportedConfiguration {
   UnsupportedConfigurationType type;
   List<List<Log>> reason;
-  UnsupportedConfiguration({required this.type, this.reason = const []});
+  UnsupportedConfigurationStatus status;
+  UnsupportedConfiguration({required this.type, this.reason = const [], this.status = UnsupportedConfigurationStatus.error});
 
-  String getTypeString() {
-    String delim = " - ";
+  String getTypeString({String delim = " - "}) {
     switch (type) {
       case UnsupportedConfigurationType.OpcoreSimplify: return ["Prebuilt","Auto-Tool","OpCore Simplify"].join(delim);
       case UnsupportedConfigurationType.GeneralConfigurator: return ["Configurator"].join(delim);
@@ -37,7 +41,7 @@ class UnsupportedConfiguration {
 
   @override
   String toString() {
-    return "UnsupportedConfiguration(type: $type, reason: ${jsonEncode(reason)})";
+    return "UnsupportedConfiguration(type: $type, reason: ${jsonEncode(reason)}, status: $status)";
   }
 }
 
@@ -49,4 +53,22 @@ enum UnsupportedConfigurationType {
   GeneralConfigurator,
   TopLevel,
   TopLevelClover,
+}
+
+enum UnsupportedConfigurationStatus {
+  warning,
+  error,
+}
+
+extension MapAccessExtension on Map {
+  dynamic operator *(List<String> keys) {
+    dynamic value = this;
+
+    for (String key in keys) {
+      if (value is! Map) throw Exception("Value was not a Map.");
+      value = value[key];
+    }
+
+    return value;
+  }
 }
