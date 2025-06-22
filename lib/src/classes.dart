@@ -1,13 +1,22 @@
 import 'dart:convert';
 
+enum LogType {
+  standard,
+  tab,
+}
+
 class Log {
   dynamic input;
   List<int> effects;
-  Log(this.input, {List<int>? effects}) : effects = List.from(effects ?? []);
+  bool _tab;
+
+  LogType get type => _tab ? LogType.tab : LogType.standard;
+  Log(this.input, {List<int>? effects}) : effects = List.from(effects ?? []), _tab = false;
+  Log.tab() : input = null, effects = [], _tab = true;
 
   @override
   String toString() {
-    return "${effects.map((int item) => "\x1b[${item}m").join("")}$input${"\x1b[0m"}";
+    return _tab ? "\t" : "${effects.map((int item) => "\x1b[${item}m").join("")}$input${"\x1b[0m"}";
   }
 }
 
@@ -36,6 +45,8 @@ class UnsupportedConfiguration {
       case UnsupportedConfigurationType.Olarila: return ["Prebuilt","Distro","Olarila"].join(delim);
       case UnsupportedConfigurationType.TopLevel: return ["Bootloader","Potentially not OpenCore"].join(delim);
       case UnsupportedConfigurationType.TopLevelClover: return ["Bootloader","Clover"].join(delim);
+      case UnsupportedConfigurationType.Hackintool: return ["Plist Tool", "Hackintool"].join(delim);
+      case UnsupportedConfigurationType.OldSchema: return ["Bootloader", "Old OpenCore Schema"].join(delim);
     }
   }
 
@@ -53,6 +64,8 @@ enum UnsupportedConfigurationType {
   GeneralConfigurator,
   TopLevel,
   TopLevelClover,
+  Hackintool,
+  OldSchema,
 }
 
 enum UnsupportedConfigurationStatus {
@@ -65,10 +78,54 @@ extension MapAccessExtension on Map {
     dynamic value = this;
 
     for (String key in keys) {
-      if (value is! Map) throw Exception("Value was not a Map.");
+      if (value is! Map) return null;
       value = value[key];
     }
 
     return value;
   }
+}
+
+class OpenCoreVersion {
+  final bool _latest;
+  bool get latest => _latest;
+
+  final int main;
+  final int sub;
+  final int patch;
+
+  OpenCoreVersion(this.main, this.sub, this.patch) : _latest = false;
+  OpenCoreVersion.from(String version) : main = int.tryParse(version.split(".")[0]) ?? 0, sub = int.tryParse(version.split(".")[1]) ?? 0, patch = int.tryParse(version.split(".")[2]) ?? 0, _latest = false;
+  OpenCoreVersion.latest() : _latest = true, main = 0, sub = 0, patch = 0;
+
+  bool operator <(OpenCoreVersion other) {
+    if (main == other.main) {
+      if (sub == other.sub) {
+        if (patch == other.patch) {
+          return false;
+        } else {
+          return patch < other.patch;
+        }
+      } else {
+        return sub < other.sub;
+      }
+    } else {
+      return main < other.main;
+    }
+  }
+
+  @override
+  String toString() {
+    return _latest ? "Latest" : "V. ${[main, sub, patch].join(".")}";
+  }
+}
+
+class DevicePropertiesDevice {
+  static String igpu = "PciRoot(0x0)/Pci(0x2,0x0)";
+}
+
+class UnsupportedBootArgConfiguration {
+  String? arg;
+  List<String> reason;
+  UnsupportedBootArgConfiguration({this.arg, required this.reason});
 }

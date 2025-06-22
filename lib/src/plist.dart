@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:args/args.dart';
@@ -39,11 +40,6 @@ StreamController gui({required String input, bool verbose = false, bool force = 
 
 Future<void> cli(List<String> arguments) async {
   return await main(arguments);
-}
-
-String countword({required num count, required String singular, String? plural}) {
-  plural ??= "${singular}s";
-  return count == 1 ? singular : plural;
 }
 
 Future<void> main(List<String> arguments, {bool alt = false}) async {
@@ -124,13 +120,12 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
   }
 
   verbose([Log("Generating report...")]);
-  sectiondelim();
 
   try {
     List<Map> add = (plist.json["Kernel"]["Add"] as List).whereType<Map>().toList();
     int count = add.length;
     int enabled = add.where((item) => item["Enabled"] == true).length;
-    log([Log("Kexts: ($count kexts, $enabled enabled)")]);
+    title([Log("Kexts ($count kexts, $enabled enabled)")]);
 
     for (int i = 0; i < add.length; i++) {
       Map item = add[i];
@@ -139,6 +134,7 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
       String? minkernel = item["MinKernel"];
       String? maxkernel = item["MaxKernel"];
       String kernel = "";
+      String macos = "";
 
       bool valid<T>(dynamic input) {
         return input is T && input != "";
@@ -147,39 +143,101 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
       if (valid<String>(minkernel)) {
         if (valid<String>(maxkernel)) {
           kernel = "$minkernel to $maxkernel";
+          macos = "${getMacOSVersionForDarwinVersion(minkernel!)} to ${getMacOSVersionForDarwinVersion(maxkernel!)}";
         } else {
           kernel = "$minkernel and higher";
+          macos = "${getMacOSVersionForDarwinVersion(minkernel!)} and higher";
         }
       } else if (valid<String>(maxkernel)) {
         kernel = "$maxkernel and lower";
+        macos = "${getMacOSVersionForDarwinVersion(maxkernel!)} and lower";
       } else {
         kernel = "any";
+        macos = "any";
       }
 
-      log([Log("${i + 1}. "), Log(name, effects: [1]), Log(" (enabled: "), Log("$enabled", effects: [1, enabled ? 32 : 31]), Log(") (kernel: "), Log(kernel, effects: [1]), Log(")")]);
+      log([Log("${i + 1}. "), Log(name, effects: [1]), Log(" (enabled: "), Log("$enabled", effects: [1, enabled ? 32 : 31]), Log(") (kernel: "), Log(kernel, effects: [1]), Log(") (macOS: "), Log(macos, effects: [1]), Log(")")]);
     }
 
-    sectiondelim();
   } catch (e) {
-    null;
+    verboseerror([Log(e)]);
   }
+
+  try {
+    String variable = plist["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"];
+    bool delete = plist["NVRAM"]["Delete"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"].contains("boot-args");
+    bool newline = variable.contains(RegExp("\n"));
+
+    List<UnsupportedBootArgConfiguration> errors = [];
+    List<String> args = variable.split(".");
+
+    for (String arg in args) {
+      List matches = arg.allMatches("=").toList();
+      if (matches.isNotEmpty) {
+        if (matches.length > 1) {
+          errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["too many equal signs"]));
+        } else {
+          if (arg.startsWith("-")) {
+            errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["invalid starting dash"]));
+          }
+        }
+      } else {
+        if (!arg.startsWith("-")) {
+          errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["no starting dash"]));
+        }
+      }
+    }
+
+    if (newline) {
+      errors.add(UnsupportedBootArgConfiguration(reason: ["unexpected newline"]));
+    }
+
+    title([Log("Boot Arguments")]);
+    print([Log("boot-args: "), Log(args.join(" "), effects: [1])]);
+    print([Log("Present in NVRAM > Delete: "), Log(delete ? "Yes" : "No", effects: [1, delete ? 32 : 31])]);
+
+    if (errors.isNotEmpty) {
+      snippetdelim();
+      for (var i = 0; i < errors.length; i++) {
+        UnsupportedBootArgConfiguration error = errors[i];
+        print([Log("${i + 1}. "), Log(error.reason.join(", "), effects: [1]), if (error.arg != null) Log(" (boot-arg: ${error.arg})")]);
+      }
+    }
+  } catch (e) {
+    verboseerror([Log(e)]);
+  }
+
+  title([Log("Misc")]);
 
   try {
     List<String> keys = ["Misc", "Security", "SecureBootModel"];
     String secureboot = plist.json * keys;
     misc(keys: keys, value: [Log(secureboot, effects: [1])]);
   } catch (e) {
-    null;
+    verboseerror([Log(e)]);
+  }
+
+  try {
+    List<String> keys = ["Misc", "Security", "Vault"];
+    String vault = plist.json * keys;
+    misc(keys: keys, value: [Log(vault, effects: [1])]);
+  } catch (e) {
+    verboseerror([Log(e)]);
   }
 
   try {
     List<String> keys = ["NVRAM", "Add", "7C436110-AB2A-4BBB-A880-FE41995C9F82", "prev-lang:kbd"];
-    Uint8List bytes = plist.json * keys;
-    String hex = getHex(bytes);
-    String value = utf8.decode(bytes);
-    misc(keys: keys, value: [Log(hex, effects: [1]), Log(" ("), Log(value, effects: [1]), Log(")")]);
+    try {
+      Uint8List bytes = plist.json * keys;
+      String hex = getHex(bytes);
+      String value = utf8.decode(bytes);
+      misc(keys: keys, value: [Log(hex, effects: [1]), Log(" ("), Log(value, effects: [1]), Log(")"), Log(" ("), Log(getType(bytes), effects: [1]), Log(")")]);
+    } catch (e) {
+      dynamic value = plist.json * keys;
+      misc(keys: keys, value: [Log("$value", effects: [1]), Log(" ("), Log(getType(value), effects: [1]), Log(")")]);
+    }
   } catch (e) {
-    rethrow;
+    verboseerror([Log(e)]);
   }
 
   verbose([Log("Parse complete!")]);
@@ -189,6 +247,28 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
 
 String getHex(Uint8List bytes) {
   return "0x${bytes.map((item) => item.toRadixString(16).toUpperCase()).join("")}";
+}
+
+String getType(dynamic value) {
+  if (value is Map) {
+    if (value.containsKey("CF\$UID")) {
+      return "UID";
+    } else {
+      return "Dictionary";
+    }
+  } else if (value is List && value is! TypedDataList) {
+    return "Array";
+  } else if (value is bool) {
+    return "Boolean";
+  } else if (value is DateTime) {
+    return "Date";
+  } else if (value is int) {
+    return "Integer";
+  } else if (value is String) {
+    return "String";
+  } else {
+    return "Data";
+  }
 }
 
 void misc({required List<String> keys, required List<Log> value, String delim = " > "}) {
@@ -228,17 +308,18 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(status: clover ? UnsupportedConfigurationStatus.error : UnsupportedConfigurationStatus.warning, type: clover ? UnsupportedConfigurationType.TopLevelClover : UnsupportedConfigurationType.TopLevel, reason: [[Log("Present top level OpenCore keys: "), Log("${(match * 100).round()}% match", effects: [1]), Log(" (below threshold of ${(threshold * 100)}%): ${presentKeys.join(", ")}")], if (clover) [Log("Present top level Clover keys: "), Log("${(matchClover * 100).round()}% match", effects: [1]), Log(" (above threshold of ${(threshold * 100)}%): ${cloverKeysPresent.join(", ")}")]]));
     }
   } catch (e) {
-    null;
+    verboseerror([Log(e)]);
   }
 
   try {
     int threshold = 3;
     int matches = 0;
     Map boot = plist["Misc"]["Boot"];
+
     bool pickerMode = boot["PickerMode"] == "External";
     bool timeout = boot["Timeout"] == 10;
     bool target = plist["Misc"]["Debug"]["Target"] == 0;
-    bool language = plist["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["prev-lang:kbd"] == "en:252";
+    bool language = utf8.decode(plist["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["prev-lang:kbd"]) == "en:252";
 
     for (bool item in [pickerMode, timeout, target, language]) {
       if (item == true) {
@@ -250,7 +331,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OpcoreSimplify, reason: [[Log("Matches: $matches (above/equal to threshold of $threshold)")], [Log("PickerMode match: $pickerMode")], [Log("Timeout match: $timeout")], [Log("Target match: $target")], [Log("prev-lang:kbd match: $language")]]));
     }
   } catch (e) {
-    null;
+    verboseerror([Log(e)]);
   }
 
   try {
@@ -261,7 +342,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.Olarila, reason: [[Log("Matches to ${regex.pattern}: "), Log("${matches.length}", effects: [1])]]));
     }
   } catch (e) {
-    null;
+    verboseerror([Log(e)]);
   }
 
   try {
@@ -283,7 +364,53 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.GeneralConfigurator, reason: [[Log("Matches to ${regex.pattern}: "), Log("$matches", effects: [1])]]));
     }
   } catch (e) {
-    rethrow;
+    verboseerror([Log(e)]);
+  }
+
+  try {
+    Map add = plist["DeviceProperties"]["Add"];
+    List<Map<String, dynamic>> properties = add.keys.map((key) {
+      dynamic value = add[key];
+      if (value is! Map) return null;
+      return {"key": key, "value": value};
+    }).whereType<Map<String, dynamic>>().toList();
+
+    int slotNameCount = properties.map((item) {
+      return item["value"]["AAPL,slot-name"] != null;
+    }).length;
+
+    for (int i = 0; i < properties.length; i++) {
+      String key = properties[i]["key"];
+      Map value = properties[i]["value"];
+    }
+  } catch (e) {
+    verboseerror([Log(e)]);
+  }
+
+  try {
+    OpenCoreVersion threshold = OpenCoreVersion(1, 0, 2);
+    OpenCoreVersion max = OpenCoreVersion.latest();
+
+    void check(OpenCoreVersion version, List<String> keys) {
+      if (plist * keys == null) {
+        max = version;
+      }
+    }
+
+    check(OpenCoreVersion(1, 0, 4), ["Booter", "Quirks", "ClearTaskSwitchBit"]);
+    check(OpenCoreVersion(1, 0, 1), ["UEFI", "Unload"]);
+    check(OpenCoreVersion(0, 9, 6), ["Booter", "Quirks", "FixupAppleEfiImages"]);
+    check(OpenCoreVersion(0, 8, 9), ["UEFI", "Quirks", "ResizeUsePciRbIo"]);
+    check(OpenCoreVersion(0, 7, 0), ["Kernel", "Quirks", "ProvideCurrentCpuInfo"]);
+    check(OpenCoreVersion(0, 5, 4), ["Booter", "Quirks", "SignalAppleOS"]);
+
+    verbose([Log("Maximum OpenCore version: $max")]);
+
+    if (max < threshold) {
+      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OldSchema, reason: [[Log("Maximum OpenCore schema version: "), Log("$max", effects: [1])]], status: UnsupportedConfigurationStatus.warning));
+    }
+  } catch (e) {
+    verboseerror([Log(e)]);
   }
 
   return results;
