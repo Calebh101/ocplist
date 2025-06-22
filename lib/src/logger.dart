@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:ocplist/src/classes.dart';
 import 'package:ocplist/src/plist.dart';
 
-void print(List<Log> input, {bool? overrideOtuputToController}) {
-  if (overrideOtuputToController ?? outputToController) {
+void print(List<Log> input, {bool? overrideOutputToController}) {
+  if (overrideOutputToController ?? outputToController) {
     controller.sink.add(input);
   } else {
     stdout.writeln(input.map((item) => item.toString()).join(""));
@@ -38,9 +38,9 @@ void error(List<Log> input, {int? exitCode}) {
   if (exitCode != null) exit(exitCode);
 }
 
-void verboseerror(List<Log> input) {
+void verboseerror(String location, List<Log> input) {
   if (args["verbose"] == true) {
-    print([Log("Verbose ERROR: "), ...input].map((item) {
+    print([Log("Verbose ERROR (from: $location): "), ...input].map((item) {
     item.effects.addAll([2, 31]);
     return item;
   }).toList());

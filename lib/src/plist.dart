@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:args/args.dart';
@@ -44,7 +43,7 @@ Future<void> cli(List<String> arguments) async {
 
 Future<void> main(List<String> arguments, {bool alt = false}) async {
   if (lock == true) {
-    return print([Log("Error", effects: [31]), Log(": Process already started")], overrideOtuputToController: alt);
+    return print([Log("Error", effects: [31]), Log(": Process already started")], overrideOutputToController: alt);
   }
 
   Plist plist;
@@ -90,7 +89,7 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
   if (unsupportedConfigurations.isNotEmpty) {
     int errors = 0;
     int warnings = 0;
-    sectiondelim();
+    title([Log("Invalid Configurations")]);
 
     for (int i = 0; i < unsupportedConfigurations.length; i++) {
       UnsupportedConfiguration configuration = unsupportedConfigurations[i];
@@ -160,7 +159,7 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
     }
 
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("kexts", [Log(e)]);
   }
 
   try {
@@ -185,6 +184,9 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
         if (!arg.startsWith("-")) {
           errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["no starting dash"]));
         }
+        if (arg.split("-")[1] == "") {
+          errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["no argument after dash"]));
+        }
       }
     }
 
@@ -193,18 +195,19 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
     }
 
     title([Log("Boot Arguments")]);
-    print([Log("boot-args: "), Log(args.join(" "), effects: [1])]);
+    print([Log("boot-args: "), Log(args.join(" ").replaceAll("\n", "[\\n]"), effects: [1])]);
     print([Log("Present in NVRAM > Delete: "), Log(delete ? "Yes" : "No", effects: [1, delete ? 32 : 31])]);
 
     if (errors.isNotEmpty) {
       snippetdelim();
+      log([Log("Errors")]);
       for (var i = 0; i < errors.length; i++) {
         UnsupportedBootArgConfiguration error = errors[i];
-        print([Log("${i + 1}. "), Log(error.reason.join(", "), effects: [1]), if (error.arg != null) Log(" (boot-arg: ${error.arg})")]);
+        print([Log("${i + 1}. "), Log(error.reason.join(", "), effects: [1, 31]), if (error.arg != null) Log(" (boot-arg: ${error.arg})")]);
       }
     }
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("boot-args", [Log(e)]);
   }
 
   title([Log("Misc")]);
@@ -214,7 +217,7 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
     String secureboot = plist.json * keys;
     misc(keys: keys, value: [Log(secureboot, effects: [1])]);
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("SecureBootModel", [Log(e)]);
   }
 
   try {
@@ -222,7 +225,7 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
     String vault = plist.json * keys;
     misc(keys: keys, value: [Log(vault, effects: [1])]);
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("Vault", [Log(e)]);
   }
 
   try {
@@ -237,7 +240,7 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
       misc(keys: keys, value: [Log("$value", effects: [1]), Log(" ("), Log(getType(value), effects: [1]), Log(")")]);
     }
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("prev-lang:kbd", [Log(e)]);
   }
 
   verbose([Log("Parse complete!")]);
@@ -308,7 +311,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(status: clover ? UnsupportedConfigurationStatus.error : UnsupportedConfigurationStatus.warning, type: clover ? UnsupportedConfigurationType.TopLevelClover : UnsupportedConfigurationType.TopLevel, reason: [[Log("Present top level OpenCore keys: "), Log("${(match * 100).round()}% match", effects: [1]), Log(" (below threshold of ${(threshold * 100)}%): ${presentKeys.join(", ")}")], if (clover) [Log("Present top level Clover keys: "), Log("${(matchClover * 100).round()}% match", effects: [1]), Log(" (above threshold of ${(threshold * 100)}%): ${cloverKeysPresent.join(", ")}")]]));
     }
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("unsupportedconfiguration.bootloader.toplevel", [Log(e)]);
   }
 
   try {
@@ -331,7 +334,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OpcoreSimplify, reason: [[Log("Matches: $matches (above/equal to threshold of $threshold)")], [Log("PickerMode match: $pickerMode")], [Log("Timeout match: $timeout")], [Log("Target match: $target")], [Log("prev-lang:kbd match: $language")]]));
     }
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("unsupportedconfiguration.prebuilt.autotool", [Log(e)]);
   }
 
   try {
@@ -342,7 +345,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.Olarila, reason: [[Log("Matches to ${regex.pattern}: "), Log("${matches.length}", effects: [1])]]));
     }
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("unsupportedconfiguration.prebuilt.olarila", [Log(e)]);
   }
 
   try {
@@ -364,11 +367,13 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.GeneralConfigurator, reason: [[Log("Matches to ${regex.pattern}: "), Log("$matches", effects: [1])]]));
     }
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("unsupportedconfiguration.configurators", [Log(e)]);
   }
 
   try {
+    double slotNameThreshold = 0.8;
     Map add = plist["DeviceProperties"]["Add"];
+
     List<Map<String, dynamic>> properties = add.keys.map((key) {
       dynamic value = add[key];
       if (value is! Map) return null;
@@ -384,7 +389,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       Map value = properties[i]["value"];
     }
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("unsupportedconfiguration.hackintool", [Log(e)]);
   }
 
   try {
@@ -410,7 +415,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
       results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OldSchema, reason: [[Log("Maximum OpenCore schema version: "), Log("$max", effects: [1])]], status: UnsupportedConfigurationStatus.warning));
     }
   } catch (e) {
-    verboseerror([Log(e)]);
+    verboseerror("unsupportedconfiguration.bootloader.schema", [Log(e)]);
   }
 
   return results;

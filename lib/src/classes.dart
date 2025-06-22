@@ -99,7 +99,15 @@ class OpenCoreVersion {
   OpenCoreVersion.latest() : _latest = true, main = 0, sub = 0, patch = 0;
 
   bool operator <(OpenCoreVersion other) {
-    if (main == other.main) {
+    if (latest) {
+      if (other.latest) {
+        return true;
+      } else {
+        return false;
+      }
+    } else if (other.latest) {
+      return true;
+    } else if (main == other.main) {
       if (sub == other.sub) {
         if (patch == other.patch) {
           return false;
