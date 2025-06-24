@@ -38,13 +38,13 @@ class UnsupportedConfiguration {
 
   String getTypeString({String delim = " - "}) {
     switch (type) {
-      case UnsupportedConfigurationType.OpcoreSimplify: return ["Prebuilt","Auto-Tool","OpCore Simplify"].join(delim);
-      case UnsupportedConfigurationType.GeneralConfigurator: return ["Configurator"].join(delim);
-      case UnsupportedConfigurationType.OCAT: return ["Configurator","OCAT"].join(delim);
-      case UnsupportedConfigurationType.OCC: return ["Configurator","OpenCore Configurator"].join(delim);
-      case UnsupportedConfigurationType.Olarila: return ["Prebuilt","Distro","Olarila"].join(delim);
-      case UnsupportedConfigurationType.TopLevel: return ["Bootloader","Potentially not OpenCore"].join(delim);
-      case UnsupportedConfigurationType.TopLevelClover: return ["Bootloader","Clover"].join(delim);
+      case UnsupportedConfigurationType.OpcoreSimplify: return ["Prebuilt", "Auto-Tool", "OpCore Simplify"].join(delim);
+      case UnsupportedConfigurationType.GeneralConfigurator: return ["Plist Tool", "Configurator"].join(delim);
+      case UnsupportedConfigurationType.OCAT: return ["Plist Tool", "Configurator", "OCAT"].join(delim);
+      case UnsupportedConfigurationType.OCC: return ["Plist Tool", "Configurator", "OpenCore Configurator"].join(delim);
+      case UnsupportedConfigurationType.Olarila: return ["Prebuilt", "Distro", "Olarila"].join(delim);
+      case UnsupportedConfigurationType.TopLevel: return ["Bootloader", "Potentially not OpenCore"].join(delim);
+      case UnsupportedConfigurationType.TopLevelClover: return ["Bootloader", "Clover"].join(delim);
       case UnsupportedConfigurationType.Hackintool: return ["Plist Tool", "Hackintool"].join(delim);
       case UnsupportedConfigurationType.OldSchema: return ["Bootloader", "Old OpenCore Schema"].join(delim);
     }
@@ -133,7 +133,25 @@ class DevicePropertiesDevice {
 }
 
 class UnsupportedBootArgConfiguration {
-  String? arg;
+  UnsupportedBootArgConfigurationInput input;
   List<String> reason;
-  UnsupportedBootArgConfiguration({this.arg, required this.reason});
+  UnsupportedBootArgConfiguration({required this.input, required this.reason});
+}
+
+class UnsupportedBootArgConfigurationInput {
+  final String? _arg;
+  final int? _char;
+
+  UnsupportedBootArgConfigurationInputType get type => _arg != null ? UnsupportedBootArgConfigurationInputType.arg : (_char != null ? UnsupportedBootArgConfigurationInputType.char : UnsupportedBootArgConfigurationInputType.none);
+  dynamic get input => _arg ?? _char;
+
+  const UnsupportedBootArgConfigurationInput.argument(String arg) : _arg = arg, _char = null;
+  const UnsupportedBootArgConfigurationInput.character(int char) : _arg = null, _char = char;
+  const UnsupportedBootArgConfigurationInput.none() : _arg = null, _char = null;
+}
+
+enum UnsupportedBootArgConfigurationInputType {
+  arg,
+  char,
+  none,
 }

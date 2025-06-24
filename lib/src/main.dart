@@ -1,9 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:http/http.dart' as http;
 import 'package:ocplist/src/classes.dart';
 import 'package:ocplist/src/logger.dart';
+import 'package:path/path.dart' as Path;
+
+late ArgResults args;
+late bool outputToController;
+bool lock = false;
+StreamController controller = StreamController.broadcast();
 
 Future<String?> getData(String path) async {
   String? raw;
@@ -22,6 +30,7 @@ Future<String?> getData(String path) async {
     try {
       Uri? uri = Uri.tryParse(path);
       if (uri != null) {
+        print([Log("Downloading file...")]);
         http.Response response = await http.get(uri).timeout(Duration(seconds: 10));
 
         if (response.statusCode == 200) {
@@ -51,7 +60,7 @@ Never didExit() {
 
 String countword({required num count, required String singular, String? plural}) {
   plural ??= "${singular}s";
-  return count == 1 ? singular : plural;
+  return count == 1 || count == 1.0 ? singular : plural;
 }
 
 String getMacOSVersionForDarwinVersion(String darwin) {
@@ -87,4 +96,10 @@ String getMacOSVersionForDarwinVersion(String darwin) {
   }
 
   return "$name $result";
+}
+
+Directory getDataDirectory() {
+  String home = (Platform.isWindows ? Platform.environment['USERPROFILE'] : Platform.environment['HOME'])!;
+  String path = Path.joinAll([home, ".ocplist"]);
+  return Directory(path);
 }

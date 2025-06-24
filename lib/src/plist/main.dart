@@ -7,6 +7,9 @@ import 'package:args/args.dart';
 import 'package:ocplist/src/classes.dart';
 import 'package:ocplist/src/logger.dart';
 import 'package:ocplist/src/main.dart';
+import 'package:ocplist/src/plist/configurations.dart';
+import 'package:ocplist/src/plist/ocvalidate.dart';
+import 'package:path/path.dart' as Path;
 import 'package:plist_parser/plist_parser.dart';
 import 'package:xml/xml.dart';
 
@@ -17,11 +20,6 @@ import 'package:xml/xml.dart';
   // 3: Invalid plist path
   // 4: Invalid configuration
 
-late ArgResults args;
-late bool outputToController;
-bool lock = false;
-StreamController controller = StreamController.broadcast();
-
 bool isLocked() {
   return lock;
 }
@@ -31,9 +29,9 @@ Never quit([int code = 0]) {
   exit(code);
 }
 
-StreamController gui({required String input, bool verbose = false, bool force = false}) {
+StreamController gui({required String input, bool verbose = false, bool force = false, bool web = false}) {
   List<String> args = [input, if (verbose) "--verbose", if (force) "--force"];
-  main(args, alt: true);
+  main(args, alt: true, web: web);
   return controller;
 }
 
@@ -41,13 +39,14 @@ Future<void> cli(List<String> arguments) async {
   return await main(arguments);
 }
 
-Future<void> main(List<String> arguments, {bool alt = false}) async {
+Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) async {
   if (lock == true) {
     return print([Log("Error", effects: [31]), Log(": Process already started")], overrideOutputToController: alt);
   }
 
   Plist plist;
   bool directPlist = false;
+
   lock = true;
   outputToController = alt;
 
@@ -93,7 +92,7 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
 
     for (int i = 0; i < unsupportedConfigurations.length; i++) {
       UnsupportedConfiguration configuration = unsupportedConfigurations[i];
-      int color = configuration.status == UnsupportedConfigurationStatus.warning ? 32 : 31;
+      int color = configuration.status == UnsupportedConfigurationStatus.warning ? 33 : 31;
       log([Log("Invalid Configuration", effects: [33]), Log(" ("), Log(configuration.status.toString().split(".")[1], effects: [color]), Log("): "), Log(configuration.getTypeString(), effects: [1, 31])]);
 
       switch (configuration.status) {
@@ -111,7 +110,7 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
       }
     }
 
-    print([Log("Found "), Log("${unsupportedConfigurations.length} unsupported configurations", effects: [1]), Log(" with "), Log("$warnings warnings", effects: [1, 33]), Log(" and "), Log("$errors errors", effects: [1, 31]), Log("!")]);
+    print([Log("Found "), Log("${unsupportedConfigurations.length} unsupported configurations", effects: [1]), Log(" with "), Log("$warnings ${countword(count: warnings, singular: "warning")}", effects: [1, 33]), Log(" and "), Log("$errors ${countword(count: errors, singular: "error")}", effects: [1, 31]), Log("!")]);
 
     if (errors > 0 && args["force"] != true) {
       quit(4);
@@ -119,6 +118,12 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
   }
 
   verbose([Log("Generating report...")]);
+
+  if (web) {
+    await ocvalidateweb(plist.raw);
+  } else {
+    await ocvalidate(plist.raw);
+  }
 
   try {
     List<Map> add = (plist.json["Kernel"]["Add"] as List).whereType<Map>().toList();
@@ -165,45 +170,50 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
   try {
     String variable = plist["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"];
     bool delete = plist["NVRAM"]["Delete"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"].contains("boot-args");
-    bool newline = variable.contains(RegExp("\n"));
+    Iterable<RegExpMatch> newline = RegExp("\n").allMatches(variable);
 
     List<UnsupportedBootArgConfiguration> errors = [];
-    List<String> args = variable.split(".");
+    List<String> args = variable.split(RegExp(r"[ \n]"));
 
     for (String arg in args) {
-      List matches = arg.allMatches("=").toList();
+      List matches = RegExp("=").allMatches(arg).toList();
+
       if (matches.isNotEmpty) {
         if (matches.length > 1) {
-          errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["too many equal signs"]));
+          errors.add(UnsupportedBootArgConfiguration(input: UnsupportedBootArgConfigurationInput.argument(arg), reason: ["too many equal signs"]));
         } else {
           if (arg.startsWith("-")) {
-            errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["invalid starting dash"]));
+            errors.add(UnsupportedBootArgConfiguration(input: UnsupportedBootArgConfigurationInput.argument(arg), reason: ["invalid starting dash"]));
           }
         }
       } else {
         if (!arg.startsWith("-")) {
-          errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["no starting dash"]));
+          errors.add(UnsupportedBootArgConfiguration(input: UnsupportedBootArgConfigurationInput.argument(arg), reason: ["no starting dash"]));
         }
-        if (arg.split("-")[1] == "") {
-          errors.add(UnsupportedBootArgConfiguration(arg: arg, reason: ["no argument after dash"]));
+        if (arg.endsWith("-")) {
+          errors.add(UnsupportedBootArgConfiguration(input: UnsupportedBootArgConfigurationInput.argument(arg), reason: ["invalid ending dash"]));
+        }
+        if (arg.allMatches("-").length > 1) {
+          errors.add(UnsupportedBootArgConfiguration(input: UnsupportedBootArgConfigurationInput.argument(arg), reason: ["too many dashes"]));
         }
       }
     }
 
-    if (newline) {
-      errors.add(UnsupportedBootArgConfiguration(reason: ["unexpected newline"]));
+    for (RegExpMatch match in newline) {
+      errors.add(UnsupportedBootArgConfiguration(input: UnsupportedBootArgConfigurationInput.character(match.start), reason: ["invalid newline"]));
     }
 
     title([Log("Boot Arguments")]);
-    print([Log("boot-args: "), Log(args.join(" ").replaceAll("\n", "[\\n]"), effects: [1])]);
+    print([Log("boot-args: "), Log(variable.replaceAll("\n", "[\\n]"), effects: [1])]);
     print([Log("Present in NVRAM > Delete: "), Log(delete ? "Yes" : "No", effects: [1, delete ? 32 : 31])]);
 
     if (errors.isNotEmpty) {
       snippetdelim();
-      log([Log("Errors")]);
+      log([Log("Errors:", effects: [1])]);
+
       for (var i = 0; i < errors.length; i++) {
         UnsupportedBootArgConfiguration error = errors[i];
-        print([Log("${i + 1}. "), Log(error.reason.join(", "), effects: [1, 31]), if (error.arg != null) Log(" (boot-arg: ${error.arg})")]);
+        print([Log("${i + 1}. "), Log(error.reason.join(", "), effects: [1, 31]), if (error.input.type != UnsupportedBootArgConfigurationInputType.none) (error.input.type == UnsupportedBootArgConfigurationInputType.arg ? Log(" (boot-arg: ${error.input.input})") : (Log(" (character: ${error.input.input})")))]);
       }
     }
   } catch (e) {
@@ -243,6 +253,28 @@ Future<void> main(List<String> arguments, {bool alt = false}) async {
     verboseerror("prev-lang:kbd", [Log(e)]);
   }
 
+  try {
+    List<String> keys = List.generate(4, (int i) {
+      return "#WARNING - ${i + 1}";
+    });
+
+    List<String> found = [];
+
+    for (String key in keys) {
+      if (plist.json.containsKey(key)) {
+        found.add(key);
+      }
+    }
+
+    if (found.isNotEmpty) {
+      log([Log("Sample entries: "), Log(found.length, effects: [1]), Log(" found: "), Log(found.join(", "), effects: [1])]);
+    } else {
+      log([Log("Sample entries: 0 found")]);
+    }
+  } catch (e) {
+    verboseerror("sample keys", [Log(e)]);
+  }
+
   verbose([Log("Parse complete!")]);
   lock = false;
   quit(0);
@@ -278,147 +310,13 @@ void misc({required List<String> keys, required List<Log> value, String delim = 
   log([Log("${keys.join(delim)}: "), ...value]);
 }
 
-List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map plist) {
-  List<UnsupportedConfiguration> results = [];
-
-  try {
-    List<String> keys = ["ACPI", "Booter", "DeviceProperties", "Kernel", "Misc", "NVRAM", "PlatformInfo", "UEFI"];
-    List<String> cloverKeys = ["ACPI", "Boot", "BootGraphics", "CPU", "Devices", "DisableDrivers?", "GUI", "Graphics", "KernelAndKextPatches", "Quirks", "RtVariables", "SMBIOS", "SMBIOS_capitan", "SMBIOS_ventura", "SystemParameters"];
-    List<String> presentKeys = [];
-
-    for (String key in keys) {
-      if (plist.containsKey(key)) {
-        presentKeys.add(key);
-      }
-    }
-
-    double threshold = 0.9;
-    double match = presentKeys.length / keys.length;
-
-    if (match < threshold) {
-      bool clover = false;
-      List<String> cloverKeysPresent = [];
-
-      for (String key in cloverKeys) {
-        if (plist.containsKey(key)) {
-          cloverKeysPresent.add(key);
-        }
-      }
-
-      double matchClover = cloverKeysPresent.length / cloverKeys.length;
-      if (matchClover > threshold) clover = true;
-
-      results.add(UnsupportedConfiguration(status: clover ? UnsupportedConfigurationStatus.error : UnsupportedConfigurationStatus.warning, type: clover ? UnsupportedConfigurationType.TopLevelClover : UnsupportedConfigurationType.TopLevel, reason: [[Log("Present top level OpenCore keys: "), Log("${(match * 100).round()}% match", effects: [1]), Log(" (below threshold of ${(threshold * 100)}%): ${presentKeys.join(", ")}")], if (clover) [Log("Present top level Clover keys: "), Log("${(matchClover * 100).round()}% match", effects: [1]), Log(" (above threshold of ${(threshold * 100)}%): ${cloverKeysPresent.join(", ")}")]]));
-    }
-  } catch (e) {
-    verboseerror("unsupportedconfiguration.bootloader.toplevel", [Log(e)]);
-  }
-
-  try {
-    int threshold = 3;
-    int matches = 0;
-    Map boot = plist["Misc"]["Boot"];
-
-    bool pickerMode = boot["PickerMode"] == "External";
-    bool timeout = boot["Timeout"] == 10;
-    bool target = plist["Misc"]["Debug"]["Target"] == 0;
-    bool language = utf8.decode(plist["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["prev-lang:kbd"]) == "en:252";
-
-    for (bool item in [pickerMode, timeout, target, language]) {
-      if (item == true) {
-        matches++;
-      }
-    }
-
-    if (matches >= threshold) {
-      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OpcoreSimplify, reason: [[Log("Matches: $matches (above/equal to threshold of $threshold)")], [Log("PickerMode match: $pickerMode")], [Log("Timeout match: $timeout")], [Log("Target match: $target")], [Log("prev-lang:kbd match: $language")]]));
-    }
-  } catch (e) {
-    verboseerror("unsupportedconfiguration.prebuilt.autotool", [Log(e)]);
-  }
-
-  try {
-    RegExp regex = RegExp(r'MaLd0n|olarila', multiLine: true, caseSensitive: false);
-    Iterable matches = regex.allMatches(raw);
-
-    if (matches.isNotEmpty) {
-      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.Olarila, reason: [[Log("Matches to ${regex.pattern}: "), Log("${matches.length}", effects: [1])]]));
-    }
-  } catch (e) {
-    verboseerror("unsupportedconfiguration.prebuilt.olarila", [Log(e)]);
-  }
-
-  try {
-    RegExp regex = RegExp(r'^([Vv]\d+\.\d+(\.\d+)?(\s*\|\s*.+)?).*'); // Taken from CorpNewt's CorpBot.py $plist command
-    int matches = 0;
-
-    for (dynamic item in plist["Kernel"]["Add"]) {
-      if (item is! Map) continue;
-      dynamic comment = item["Comment"];
-      print([Log("$comment")]);
-      bool status = comment is String && regex.hasMatch(comment);
-
-      if (status) {
-        matches++;
-      }
-    }
-
-    if (matches > 0) {
-      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.GeneralConfigurator, reason: [[Log("Matches to ${regex.pattern}: "), Log("$matches", effects: [1])]]));
-    }
-  } catch (e) {
-    verboseerror("unsupportedconfiguration.configurators", [Log(e)]);
-  }
-
-  try {
-    double slotNameThreshold = 0.8;
-    Map add = plist["DeviceProperties"]["Add"];
-
-    List<Map<String, dynamic>> properties = add.keys.map((key) {
-      dynamic value = add[key];
-      if (value is! Map) return null;
-      return {"key": key, "value": value};
-    }).whereType<Map<String, dynamic>>().toList();
-
-    int slotNameCount = properties.map((item) {
-      return item["value"]["AAPL,slot-name"] != null;
-    }).length;
-
-    for (int i = 0; i < properties.length; i++) {
-      String key = properties[i]["key"];
-      Map value = properties[i]["value"];
-    }
-  } catch (e) {
-    verboseerror("unsupportedconfiguration.hackintool", [Log(e)]);
-  }
-
-  try {
-    OpenCoreVersion threshold = OpenCoreVersion(1, 0, 2);
-    OpenCoreVersion max = OpenCoreVersion.latest();
-
-    void check(OpenCoreVersion version, List<String> keys) {
-      if (plist * keys == null) {
-        max = version;
-      }
-    }
-
-    check(OpenCoreVersion(1, 0, 4), ["Booter", "Quirks", "ClearTaskSwitchBit"]);
-    check(OpenCoreVersion(1, 0, 1), ["UEFI", "Unload"]);
-    check(OpenCoreVersion(0, 9, 6), ["Booter", "Quirks", "FixupAppleEfiImages"]);
-    check(OpenCoreVersion(0, 8, 9), ["UEFI", "Quirks", "ResizeUsePciRbIo"]);
-    check(OpenCoreVersion(0, 7, 0), ["Kernel", "Quirks", "ProvideCurrentCpuInfo"]);
-    check(OpenCoreVersion(0, 5, 4), ["Booter", "Quirks", "SignalAppleOS"]);
-
-    verbose([Log("Maximum OpenCore version: $max")]);
-
-    if (max < threshold) {
-      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OldSchema, reason: [[Log("Maximum OpenCore schema version: "), Log("$max", effects: [1])]], status: UnsupportedConfigurationStatus.warning));
-    }
-  } catch (e) {
-    verboseerror("unsupportedconfiguration.bootloader.schema", [Log(e)]);
-  }
-
-  return results;
+List<Map<String, dynamic>> getDevProps(Map plist) {
+  Map add = plist["DeviceProperties"]["Add"];
+  return add.keys.map((key) {
+    dynamic value = add[key];
+    if (value is! Map) return null;
+    return {"key": key, "value": value};
+  }).whereType<Map<String, dynamic>>().toList();
 }
 
 Future<Plist> getPlist(String path) async {
@@ -441,4 +339,35 @@ Plist parsePlist(String raw) {
   Map result = PlistParser().parse(raw);
   verbose([Log("Parsed plist (${raw.split("\n").length} lines)")]);
   return Plist(raw: raw, json: result);
+}
+
+Future<void> ocvalidate(String plist) async {
+  try {
+    title([Log("OCValidate")]);
+    File file = (await getOcValidateFile())!;
+    Directory dir = Directory.systemTemp;
+    String path = Path.join(dir.path, "config.plist");
+    File config = File(path)..createSync();
+    await config.writeAsBytes(Uint8List.fromList(utf8.encode(plist)));
+
+    if (Platform.isLinux || Platform.isMacOS) {
+      verbose([Log("changing perms of ${file.path}")]);
+      ProcessResult result = await Process.run('chmod', ['+x', file.path]);
+
+      if (result.exitCode != 0) {
+        error([Log("Unable to change ocvalidate permissions: ${result.stderr}")]);
+        return;
+      }
+    }
+
+    log([Log("Generating OCValidate report...")]);
+    ProcessResult result = await Process.run(file.path, [config.path]);
+    log([Log(result.stdout)]);
+  } catch (e) {
+    error([Log(e)]);
+  }
+}
+
+Future<void> ocvalidateweb(String raw) async {
+  verbose([Log("OCValidate is not supported on Web!")]);
 }
