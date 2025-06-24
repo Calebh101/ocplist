@@ -103,3 +103,11 @@ Directory getDataDirectory() {
   String path = Path.joinAll([home, ".ocplist"]);
   return Directory(path);
 }
+
+bool isLocked() {
+  return lock;
+}
+
+StreamController getController() {
+  return controller;
+}

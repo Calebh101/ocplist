@@ -20,23 +20,20 @@ import 'package:xml/xml.dart';
   // 3: Invalid plist path
   // 4: Invalid configuration
 
-bool isLocked() {
-  return lock;
-}
-
 Never quit([int code = 0]) {
   lock = false;
   exit(code);
 }
 
-StreamController gui({required String input, bool verbose = false, bool force = false, bool web = false}) {
-  List<String> args = [input, if (verbose) "--verbose", if (force) "--force"];
-  main(args, alt: true, web: web);
-  return controller;
+Future<void> gui({required String input, bool verbose = false, bool force = false, bool web = false, bool ocvalidate = true}) async {
+  List<String> args = [input, if (verbose) "--versbose", if (force) "--force", if (ocvalidate == false) "--no-ocvalidate"];
+  await main(args, alt: true, web: web);
+  return;
 }
 
 Future<void> cli(List<String> arguments) async {
-  return await main(arguments);
+  await main(arguments);
+  return;
 }
 
 Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) async {
@@ -46,6 +43,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
 
   Plist plist;
   bool directPlist = false;
+  bool useOcValidate = true;
 
   lock = true;
   outputToController = alt;
@@ -61,7 +59,8 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
   ArgParser parser = ArgParser()
     ..addFlag("help", abbr: "h", negatable: false, help: "Show usage")
     ..addFlag('verbose', abbr: 'v', negatable: false, help: 'Verbose output')
-    ..addFlag('force', abbr: 'f', negatable: false, help: 'Ignore unsupported configuration warnings');
+    ..addFlag('force', abbr: 'f', negatable: false, help: 'Ignore unsupported configuration warnings')
+    ..addFlag('no-ocvalidate', negatable: false, help: "Don't use OCValidate.");
 
   try {
     args = parser.parse(arguments);
@@ -75,6 +74,10 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
   if (args["help"] == true || rest.isEmpty) {
     print([Log("Usage: $usage")]);
     return;
+  }
+
+  if (args["no-ocvalidate"] == true) {
+    useOcValidate = false;
   }
 
   if (directPlist) {
@@ -119,10 +122,12 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
 
   verbose([Log("Generating report...")]);
 
-  if (web) {
-    await ocvalidateweb(plist.raw);
-  } else {
-    await ocvalidate(plist.raw);
+  if (useOcValidate) {
+    if (web) {
+      await ocvalidateweb(plist.raw);
+    } else {
+      await ocvalidate(plist.raw);
+    }
   }
 
   try {
@@ -366,8 +371,4 @@ Future<void> ocvalidate(String plist) async {
   } catch (e) {
     error([Log(e)]);
   }
-}
-
-Future<void> ocvalidateweb(String raw) async {
-  verbose([Log("OCValidate is not supported on Web!")]);
 }

@@ -155,3 +155,36 @@ enum UnsupportedBootArgConfigurationInputType {
   char,
   none,
 }
+
+class OCLog {
+  String raw;
+  List<String> logs;
+  late bool successful;
+
+  OCLog({required this.raw, required List<String> input}) : logs = input.where((line) => line.replaceAll('\x00', '').replaceAll("\\00", "").trim().isNotEmpty).toList();
+
+  void setSuccessful() {
+    successful = logs.any((String input) => input.contains("EB|LOG:EXITBS:START"));
+  }
+}
+
+class OCLogEntry {
+  String entry;
+  String type;
+  String path;
+
+  OCLogEntry({required this.entry, required this.type, required this.path});
+
+  @override
+  String toString() {
+    return "$entry ($type)";
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is OCLogEntry && entry == other.entry && type == other.type && path == other.path;
+  }
+
+  @override
+  int get hashCode => entry.hashCode ^ type.hashCode ^ path.hashCode;
+}
