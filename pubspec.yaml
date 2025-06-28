@@ -8,6 +8,7 @@ environment:
 dependencies:
   archive: ^4.0.7
   args: ^2.7.0
+  collection: ^1.19.1
   http: ^1.4.0
   path: ^1.9.1
   plist_parser: ^0.2.4

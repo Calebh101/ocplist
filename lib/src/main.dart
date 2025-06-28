@@ -10,43 +10,65 @@ import 'package:path/path.dart' as Path;
 
 late ArgResults args;
 late bool outputToController;
-bool lock = false;
+List<LogMode> lock = [];
 StreamController controller = StreamController.broadcast();
 
-Future<String?> getData(String path) async {
+enum LogMode {
+  plist,
+  log,
+}
+
+Future<String?> getData(String path, {required LogMode mode, required bool gui}) async {
   String? raw;
+  verbose([Log("Judging path $path (${path.runtimeType})")]);
 
   try {
     File file = File(path);
     if (file.existsSync()) {
-      verbose([Log("Found plist: ${file.path}")]);
+      verbose([Log("Found file: ${file.path}")]);
       raw = file.readAsStringSync();
     }
   } catch (e) {
-    null;
+    verboseerror("getData file", [Log(e)]);
   }
 
   if (raw == null) {
     try {
       Uri? uri = Uri.tryParse(path);
+
+      for (RegExpMatch match in RegExp(r"https:\/\/drive\.google\.com\/file\/d\/([^\/]+)(?:\/view)?\/?").allMatches(path)) {
+        String? id = match.group(1);
+        if (id == null) continue;
+        log([Log("Detected Google Drive file: $id")]);
+        uri = Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=$id&export=download") ?? uri;
+      }
+
+      for (RegExpMatch match in RegExp(r"https:\/\/pastebin\.com\/([^\/]+)").allMatches(path)) {
+        String? id = match.group(1);
+        if (id == null) continue;
+        log([Log("Detected Pastebin file: $id")]);
+        uri = Uri.tryParse("https://pastebin.com/raw/$id") ?? uri;
+      }
+
       if (uri != null) {
         print([Log("Downloading file...")]);
+        uri = Uri.parse("https://corsproxy.io/?$uri"); // I know not the preferred solution, I'll change this later
         http.Response response = await http.get(uri).timeout(Duration(seconds: 10));
 
         if (response.statusCode == 200) {
-          verbose([Log("Found plist: $uri")]);
+          verbose([Log("Found file: $uri")]);
           raw = utf8.decode(response.bodyBytes);
         } else {
-          error([Log("Got bad response: ${response.body} (status code: ${response.statusCode})")], exitCode: 2);
+          error([Log("Got bad response: ${response.body} (status code: ${response.statusCode})")], exitCode: 2, mode: mode, gui: gui);
         }
       }
     } catch (e) {
-      null;
+      verboseerror("getData uri", [Log(e)]);
     }
   }
 
   if (raw == null) {
-    error([Log("Invalid plist path: $path")], exitCode: 3);
+    error([Log("Invalid file path: $path")], exitCode: 3, mode: mode, gui: gui);
   } else {
     return raw;
   }
@@ -54,8 +76,18 @@ Future<String?> getData(String path) async {
   return null;
 }
 
+Never quit({int code = 0, required LogMode mode, required bool gui}) {
+  lock.remove(mode);
+  if (gui) {
+    log([Log.event(LogEvent.quit)]);
+    didExit();
+  } else {
+    exit(code);
+  }
+}
+
 Never didExit() {
-  return exit(-1);
+  throw UnimplementedError();
 }
 
 String countword({required num count, required String singular, String? plural}) {
@@ -105,9 +137,22 @@ Directory getDataDirectory() {
 }
 
 bool isLocked() {
-  return lock;
+  return lock.isNotEmpty;
 }
 
-StreamController getController() {
+StreamController getOcController() {
   return controller;
+}
+
+List<Log> generateValueLogs(String input, {String delim = "||", bool start = false}) {
+  List<String> items = input.split(delim);
+  bool bold = start;
+  List<Log> result = [];
+
+  for (String item in items) {
+    result.add(Log(item, effects: [if (bold) 1]));
+    bold = !bold;
+  }
+
+  return result;
 }

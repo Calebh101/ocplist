@@ -17,6 +17,7 @@ dependencies:
     git:
       url: https://github.com/Calebh101/localpkg-flutter.git
       ref: main
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -57,3 +58,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  fonts:
+    - family: Hack
+      fonts:
+        - asset: assets/fonts/Hack-Regular.ttf
+        - asset: assets/fonts/Hack-Bold.ttf

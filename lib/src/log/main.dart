@@ -3,9 +3,14 @@ import 'package:ocplist/src/main.dart';
 import 'package:ocplist/src/classes.dart';
 import 'package:ocplist/src/logger.dart';
 
-Future<void> gui({required String input, bool verbose = false, bool force = false, bool web = false, int? linecount}) async {
+// Exit Codes
+  // 0: OK
+  // 1: Not debug
+  // 2: Already started
+
+Future<void> OcLogGui({required String input, bool verbose = false, bool force = false, bool web = false, int? linecount, required double Function() terminalwidth}) async {
   List<String> args = [input, if (verbose) "--verbose", if (force) "--force", if (linecount != null && linecount >= 0) "--linecount=$linecount"];
-  await main(args, alt: true, web: web);
+  await main(args, alt: true, web: web, terminalwidth: terminalwidth);
   return;
 }
 
@@ -14,15 +19,16 @@ Future<void> cli(List<String> arguments) async {
   return;
 }
 
-Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) async {
-  if (lock == true) {
-    return print([Log("Error", effects: [31]), Log(": Process already started")], overrideOutputToController: alt);
+Future<void> main(List<String> arguments, {bool alt = false, bool web = false, double Function()? terminalwidth}) async {
+  if (lock.contains(LogMode.log)) {
+    print([Log("Error", effects: [31]), Log(": Process already started")], overrideOutputToController: alt);
+    quit(mode: LogMode.log, code: 2, gui: alt);
   }
 
   OCLog oclog;
   bool directLog = false;
 
-  lock = true;
+  lock.add(LogMode.log);
   outputToController = alt;
 
   try {
@@ -42,7 +48,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
   try {
     args = parser.parse(arguments);
   } catch (e) {
-    error([Log("$e")], exitCode: 1);
+    error([Log("$e")], exitCode: 1, mode: LogMode.log, gui: alt);
   }
 
   List rest = args.rest;
@@ -64,12 +70,27 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
   if (directLog) {
     oclog = parseLog(rest[0]);
   } else {
-    oclog = await getLog(rest[0]);
+    oclog = await getLog(rest[0], gui: alt);
   }
 
   List<String> tools = [];
   List<String> drivers = [];
   List<OCLogEntry> entries = [];
+
+  String? version = (() {
+    try {
+      String line = oclog.logs.firstWhere((String item) => RegExp(r"OpenCore DBG-[0-9-]+ is loading").hasMatch(item));
+      String version = line.split("OpenCore")[1].split("is loading")[0].trim();
+      return version;
+    } catch (e) {
+      verboseerror("version decider", [Log(e)]);
+      return null;
+    }
+  })();
+
+  if (version == null) {
+    error([Log("This OpenCore log is not a debug log!", effects: [31, 1])], exitCode: 1, mode: LogMode.log, gui: alt);
+  }
 
   for (String item in oclog.logs.where((String item) => RegExp(r"Adding custom entry .+\.efi \(tool\|B:0\)").hasMatch(item))) {
     String tool = item.split("Adding custom entry")[1].split("(tool|B:0)")[0].trim();
@@ -97,8 +118,31 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
   String? booted = RegExp(r'\b([A-Z][a-zA-Z]+)\s*\(').firstMatch(bootedline)?.group(1);
   bool showedMenu = oclog.logs.any((String item) => item.contains("OCB: Showing menu... "));
 
+  String? bootargs = (() {
+    try {
+      return oclog.logs.firstWhere((String item) => RegExp(r'\[EB\|MBA:OUT\] <".*?">').hasMatch(item)).split("<\"")[1].split("\">")[0].trim();
+    } catch (e) {
+      verboseerror("bootargs", [Log(e)]);
+      return null;
+    }
+  })();
+
+  double? showedMenuMs = (() {
+    try {
+      int i = oclog.logs.indexWhere((String item) => item.contains("OCB: Showing menu... "));
+      List<String> startraw = oclog.logs[i].split(" ")[0].split(":");
+      List<String> endraw = oclog.logs[i + 1].split(" ")[0].split(":");
+      OCLogTimestamp start = OCLogTimestamp(int.parse(startraw[0]), int.parse(startraw[1]));
+      OCLogTimestamp end = OCLogTimestamp(int.parse(endraw[0]), int.parse(endraw[1]));
+      return (end - start).toDouble();
+    } catch (e) {
+      verboseerror("showedMenuMs", [Log(e)]);
+      return null;
+    }
+  })();
+
   if (drivers.isNotEmpty) {
-    title([Log("Drivers (${drivers.length})")]);
+    title([Log("Drivers (${drivers.length})")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < drivers.length; i++) {
       String driver = drivers[i];
@@ -107,7 +151,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
   }
 
   if (entries.isNotEmpty) {
-    title([Log("Picker Entries")]);
+    title([Log("Picker Entries")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < entries.length; i++) {
       OCLogEntry entry = entries[i];
@@ -115,14 +159,16 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
     }
   }
 
-  title([Log("Misc")]);
+  title([Log("Misc")], overrideTerminalWidth: terminalwidth);
+  log([Log("OpenCore version: "), Log(version, effects: [1])]);
   log([Log("Log line length: "), Log(oclog.logs.length, effects: [1]), Log(" lines")]);
   log([Log("Entry booted: "), Log(booted, effects: [1])]);
-  log([Log("Menu showed: "), if (showedMenu == false) Log("No", effects: [1]), if (showedMenu == true) ...[Log("For "), Log("${0}ms", effects: [1])]]);
-  log([Log("Successful macOS boot: "), Log(oclog.successful, effects: [1])]);
+  log([Log("Menu shown: "), if (showedMenu == false) Log("No", effects: [1]), if (showedMenu == true && showedMenuMs != null) ...[Log("For "), Log("${showedMenuMs}s", effects: [1])], if (showedMenu == true && showedMenuMs == null) ...[Log("Yes")]]);
+  log([Log("Successful boot.efi boot: "), Log(oclog.successful ? "Yes" : "No", effects: [1])]);
+  log([Log("Boot arguments: "), Log(bootargs ?? "None", effects: [1])]);
 
   if (count > 0) {
-    title([Log("Last $count Lines")]);
+    title([Log("Last $count Lines")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < count; i++) {
       int index = oclog.logs.length - (count - i);
@@ -130,24 +176,27 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false}) 
       log([Log("${index + 1}. "), Log(line)]);
     }
   }
+
+  verbose([Log("Parse complete!")]);
+  lock.remove(LogMode.log);
 }
 
 OCLog parseLog(String raw) {
   return OCLog(raw: raw, input: raw.split("\n"))..setSuccessful();
 }
 
-Future<OCLog> getLog(String path) async {
-  String? raw = await getData(path);
+Future<OCLog> getLog(String path, {required bool gui}) async {
+  String? raw = await getData(path, mode: LogMode.plist, gui: gui);
   
   if (raw == null) {
-    error([Log("Invalid log file path: $path")]);
+    error([Log("Invalid log file path: $path")], mode: LogMode.log, gui: gui);
     didExit();
   }
 
   try {
     return parseLog(raw);
   } catch (e) {
-    error([Log("Invalid log file format: $e")], exitCode: 1);
+    error([Log("Invalid log file format: $e")], exitCode: 1, mode: LogMode.log, gui: gui);
     didExit();
   }
 }

@@ -1,18 +1,29 @@
 import 'dart:convert';
 
+import 'package:collection/collection.dart';
+import 'package:ocplist/src/logger.dart';
+
 enum LogType {
   standard,
   tab,
+}
+
+enum LogEvent {
+  quit,
+  resultstart,
+  resultend,
 }
 
 class Log {
   dynamic input;
   List<int> effects;
   bool _tab;
+  LogEvent? event;
 
   LogType get type => _tab ? LogType.tab : LogType.standard;
   Log(this.input, {List<int>? effects}) : effects = List.from(effects ?? []), _tab = false;
   Log.tab() : input = null, effects = [], _tab = true;
+  Log.event(this.event) : input = null, effects = [], _tab = false;
 
   @override
   String toString() {
@@ -182,9 +193,49 @@ class OCLogEntry {
 
   @override
   bool operator ==(Object other) {
-    return other is OCLogEntry && entry == other.entry && type == other.type && path == other.path;
+    bool status = identical(this, other) || (other is OCLogEntry && entry == other.entry && type == other.type && path == other.path);
+    if (status) verbose([Log("OCLogEntry == found")]);
+    return status;
   }
 
   @override
   int get hashCode => entry.hashCode ^ type.hashCode ^ path.hashCode;
+}
+
+class OCLogTimestamp {
+  int seconds;
+  int milliseconds;
+
+  OCLogTimestamp(this.seconds, this.milliseconds);
+
+  OCLogTimestamp operator -(OCLogTimestamp other) {
+    return OCLogTimestamp(seconds - other.seconds, milliseconds - other.milliseconds);
+  }
+
+  double toDouble() {
+    return double.parse("$seconds.$milliseconds");
+  }
+}
+
+class CpuId {
+  final String fromid;
+  final String toid;
+  final List<int> cpuid;
+  final List<int> cpumask;
+
+  CpuId({required String from, required String to, required List<int> id, List<int>? mask}) : fromid = from, toid = to, cpuid = id, cpumask = mask ?? [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+}
+
+class CpuIdDatabase {
+  List<CpuId> ids;
+  CpuIdDatabase(this.ids);
+
+  CpuId findById(List<int> id) {
+    return ids.firstWhere((CpuId item) {
+      List<int> cpu = item.cpuid;
+      bool status = ListEquality().equals(id, cpu);
+      verbose([Log("Comparing CPU: $id vs $cpu: $status")]);
+      return status;
+    });
+  }
 }

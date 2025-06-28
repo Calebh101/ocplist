@@ -1,4 +1,19 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:localpkg/dialogue.dart';
+import 'package:localpkg/functions.dart';
+import 'package:ocplist/oclog.dart';
+import 'package:ocplist/ocplist.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:localpkg/logger.dart';
+
+double logFontSize = kIsWeb ? 13 : 11;
+FontWeight logBoldedWeight = kIsWeb ? FontWeight.w600 : FontWeight.w700;
+String fontFamily = "Hack";
+List<String> fontFamilyFallbacks = ["monospace", "Courier New"];
+Map<OCPlistMode, List<List<Log>>> allLogs = {};
 
 void main() {
   runApp(const MyApp());
@@ -7,116 +22,413 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: "OCPlist",
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.light,
+        ),
+        scaffoldBackgroundColor: Colors.white, // Light background
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: Colors.black, // Dark background
+      ),
+      themeMode: ThemeMode.system,
+      home: Home(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
+enum OCPlistMode {
+  plist,
+  log,
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class Home extends StatefulWidget {
+  const Home({super.key});
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  @override
+  State<Home> createState() => _HomeState();
+}
+
+class _HomeState extends State<Home> {
+  OCPlistMode mode = OCPlistMode.plist;
+  OCPlistMode prevmode = OCPlistMode.plist;
+  StreamSubscription? subscription;
+  List<List<Log>> log = [];
+  List<List<Log>> result = [];
+  bool verbose = false;
+  bool showOcPlistLogs = false;
+  ScrollController scrollController = ScrollController();
+  TextEditingController textController = TextEditingController();
+  bool loggingresult = false;
+
+  void add(List<Log> input) {
+    List<Log>? resultS = [];
+    List<Log> logS = [];
+    if (showOcPlistLogs) print("OCPlist: ${input.map((input) => input.toString()).join("")}");
+
+    for (Log item in input) {
+      if (item.event == LogEvent.resultstart) {
+        loggingresult = true;
+        result = [];
+      } else if (item.event == LogEvent.resultend || item.event == LogEvent.quit) {
+        loggingresult = false;
+      } else if (item.event == null) {
+        logS.add(item);
+        if (loggingresult) resultS.add(item);
+      }
+    }
+
+    if (loggingresult) result.add(resultS);
+    if (logS.isNotEmpty) log.add(logS);
+
+    if (scrollController.position.pixels > (scrollController.position.maxScrollExtent - 10)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(Duration(milliseconds: 50), () {
+          if (scrollController.hasClients) {
+            scrollController.jumpTo(scrollController.position.maxScrollExtent);
+          }
+        });
+      });
+    }
+
+    refresh();
+  }
+
+  void clear() {
+    log = [];
+    refresh();
+  }
+
+  void refresh() async {
+    if (prevmode == mode) {
+      allLogs[mode] = log;
+      setState(() {});
+    } else {
+      allLogs[prevmode] = log;
+      log = allLogs[mode] ?? [];
+
+      (() async {
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+
+        switch (mode) {
+          case OCPlistMode.plist:
+            prefs.setInt("mode", 0);
+            break;
+          case OCPlistMode.log:
+            prefs.setInt("mode", 1);
+            break;
+        }
+
+        print("set preferred mode to ${prefs.getInt("mode")}");
+      })();
+
+      prevmode = mode;
+      setState(() {});
+      if (scrollController.hasClients) scrollController.jumpTo(scrollController.position.maxScrollExtent);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    subscription = getOcController().stream.listen((dynamic data) => add(data));
+
+    (() async {
+      int? value = (await SharedPreferences.getInstance()).getInt("mode");
+      bool success = false;
+
+      switch (value) {
+        case 0:
+          mode = OCPlistMode.plist;
+          success = true;
+          break;
+        case 1:
+          mode = OCPlistMode.log;
+          success = true;
+          break;
+      }
+
+      if (success) {
+        prevmode = mode;
+        refresh();
+      }
+    })();
+  }
+
+  @override
+  void dispose() {
+    subscription?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    double padding = 8;
+    int length = log.length * 2 - 1;
+    if (length < 0) length = 0;
+
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        centerTitle: true,
+        title: DropdownButton<OCPlistMode>(items: [
+          DropdownMenuItem(value: OCPlistMode.plist, child: Text("OCPlist")),
+          DropdownMenuItem(value: OCPlistMode.log, child: Text("OCLog")),
+        ], onChanged: (OCPlistMode? value) {
+          if (value == null || isLocked()) return;
+          mode = value;
+          refresh();
+        }, value: mode),
+        actions: [
+          PopupMenuButton<String>(
+            itemBuilder: (BuildContext context) {
+              void share<T>(T name, String option, dynamic input) {
+                showDialogue(context: context, title: "OCPlist $option Log", copy: true, copyText: "$input", content: SingleChildScrollView(child: SelectableText("$input", style: TextStyle(fontSize: logFontSize, fontFamily: "monospace"))));
+              }
+
+              List<PopupMenuEntry<T>> generateExportEntries<T>({required List<ExportItemEntry<T>> entries}) {
+                List<PopupMenuEntry<T>> wholeLog = [];
+                List<PopupMenuEntry<T>> resultLog = [];
+
+                for (ExportItemEntry entry in entries) {
+                  if (log.isNotEmpty) {
+                    wholeLog.add(
+                      PopupMenuItem<T>(
+                        onTap: () {
+                          share(entry.name, entry.option, entry.value.call(log));
+                        },
+                        value: entry.name,
+                        child: Row(
+                          children: [
+                            Icon(Icons.ios_share),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text("Export as ${entry.option}"),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (result.isNotEmpty) {
+                    resultLog.add(
+                      PopupMenuItem<T>(
+                        onTap: () {
+                          share(entry.name, entry.option, entry.value.call(result));
+                        },
+                        value: entry.name,
+                        child: Row(
+                          children: [
+                            Icon(Icons.ios_share),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text("Export Result as ${entry.option}"),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                }
+
+                return [...wholeLog, PopupMenuDivider(), ...resultLog];
+              }
+
+              return [
+                PopupMenuItem(
+                  onTap: () {
+                    clear();
+                  },
+                  value: "clear",
+                  child: Row(
+                    children: [
+                      Icon(Icons.clear),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text("Clear"),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  onTap: () {
+                    verbose = !verbose;
+                  },
+                  value: "clear",
+                  child: Row(
+                    children: [
+                      Icon(verbose ? Icons.check_box_outlined : Icons.check_box_outline_blank),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text("Verbose"),
+                      ),
+                    ],
+                  ),
+                ),
+                if (log.isNotEmpty && result.isNotEmpty)
+                ...[
+                  PopupMenuDivider(),
+                  ...generateExportEntries<String>(entries: [
+                    ExportItemEntry(name: "ascii", option: "ASCII", value: (List<List<Log>> value) => value.map((List<Log> item) => toraw(item)).join("\n").replaceAll("\n", "\\n")),
+                    ExportItemEntry(name: "plaintext", option: "Plain Text", value: (List<List<Log>> value) => value.map((List<Log> item) => item.map((Log item) => item.input.toString()).join("")).join("\n")),
+                  ]),
+                ],
+              ];
+            },
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: Padding(
+        padding: EdgeInsets.all(padding),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: textController,
+                    decoration: InputDecoration(
+                      hint: Text("URL, file path or full text..."),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.send),
+                  onPressed: () {
+                    start(padding: padding);
+                  },
+                ),
+              ],
+            ),
+            SizedBox(height: padding),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SelectableText.rich(
+                      TextSpan(
+                        children: List.generate(length, (int i) {
+                          if (i.isEven) {
+                            int index = i ~/ 2;
+                            return generateLog(log[index], context: context);
+                          } else {
+                            return TextSpan(text: '\n');
+                          }
+                        }),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
+
+  void start({required double padding}) {
+    print("running script as $mode");
+
+    switch (mode) {
+      case OCPlistMode.plist:
+        OcPlistGui(input: textController.text, verbose: verbose, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb);
+        break;
+      case OCPlistMode.log:
+        OcLogGui(input: textController.text, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb);
+        break;
+    }
+  }
+}
+
+class ExportItemEntry<T> {
+  final T name;
+  final T option;
+  final dynamic Function(List<List<Log>> value) value;
+  const ExportItemEntry({required this.name, required this.option, required this.value});
+}
+
+enum LogEffect {
+  bold,
+  dim,
+}
+
+TextSpan generateLog(List<Log> input, {required BuildContext context}) {
+  return TextSpan(
+    children: List.generate(
+      input.length,
+      (int i) {
+        Log item = input[i];
+        List<Color> colors = [];
+        List<LogEffect> effects = [];
+
+        if (item.event != null) {
+          return null;
+        }
+
+        for (int effect in item.effects) {
+          switch (effect) {
+            case 1:
+              effects.add(LogEffect.bold);
+              break;
+            case 31:
+              colors.add(Colors.red);
+              break;
+            case 32:
+              colors.add(Colors.green);
+              break;
+            case 33:
+              colors.add(Colors.yellow);
+              break;
+            case 2:
+              effects.add(LogEffect.dim);
+              break;
+            default:
+              throw Exception("Invalid effect: $effect");
+          }
+        }
+
+        Color color = colors.lastOrNull ?? getColor(context: context, type: ColorType.theme);
+
+        if (effects.contains(LogEffect.dim)) {
+          color = color.withAlpha(200);
+        }
+
+        TextStyle style = TextStyle(color: color, fontWeight: effects.contains(LogEffect.bold) ? logBoldedWeight : null, fontSize: logFontSize, fontFamily: fontFamily, fontFamilyFallback: [...fontFamilyFallbacks, fontFamily]);
+        return TextSpan(text: "${item.input}", style: style);
+      },
+    ).whereType<InlineSpan>().toList(),
+  );
+}
+
+double Function() terminalwidth({required BuildContext context, String text = "-", required double padding}) {
+  return (() {
+    int count = ((MediaQuery.of(context).size.width - padding) / 9).floor();
+    return count.toDouble();
+  });
+}
+
+String toraw(List<Log> input) {
+  List<int> bytes = input.map((Log log) => log.toString()).join("").codeUnits;
+
+  return bytes.map((int b) {
+    if (b >= 32 && b <= 126) {
+      return String.fromCharCode(b);
+    } else {
+      return '\\x${b.toRadixString(16).padLeft(2, '0')}';
+    }
+  }).join("").replaceAll("\\x0a", "\n");
 }

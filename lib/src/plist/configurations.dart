@@ -59,7 +59,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
     }
 
     if (matches >= threshold || efiupdater.isNotEmpty) {
-      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OpcoreSimplify, reason: [[Log("Matches: $matches (above/equal to threshold of $threshold)")], [Log("PickerMode match: $pickerMode")], [Log("Timeout match: $timeout")], [Log("Target match: $target")], [Log("prev-lang:kbd match: $language")], [Log("run-efi-updater matches: ${efiupdater.length}")]]));
+      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OpcoreSimplify, reason: [[Log("Matches: $matches (threshold: $threshold)")], [Log("PickerMode match: $pickerMode")], [Log("Timeout match: $timeout")], [Log("Target match: $target")], [Log("prev-lang:kbd match: $language")], [Log("run-efi-updater matches: ${efiupdater.length}")]]));
     }
   } catch (e) {
     verboseerror("unsupportedconfiguration.prebuilt.autotool", [Log(e)]);
@@ -83,7 +83,6 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
     for (dynamic item in plist["Kernel"]["Add"]) {
       if (item is! Map) continue;
       dynamic comment = item["Comment"];
-      print([Log("$comment")]);
       bool status = comment is String && regex.hasMatch(comment);
 
       if (status) {

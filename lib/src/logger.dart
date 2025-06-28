@@ -11,9 +11,16 @@ void print(List<Log> input, {bool? overrideOutputToController}) {
   }
 }
 
-void title(List<Log> logs, {bool subtitle = false, bool linebreak = true}) {
+void title(List<Log> logs, {bool subtitle = false, bool linebreak = true, required double Function()? overrideTerminalWidth}) {
+  int width = (() {
+    if (overrideTerminalWidth != null) {
+      return overrideTerminalWidth().floor();
+    } else {
+      return stdout.terminalColumns;
+    }
+  })();
+
   int chars = logs.map((item) => item.input.toString()).join("").length + 2;
-  int width = stdout.terminalColumns;
   int count = ((width - chars) / 2).ceil();
   int count2 = count;
   int spaces = 0;
@@ -46,9 +53,9 @@ void log(List<Log> logs) {
   print(logs);
 }
 
-void error(List<Log> input, {int? exitCode}) {
-  print([Log("Error: "), ...input]);
-  if (exitCode != null) exit(exitCode);
+void error(List<Log> input, {required LogMode mode, int? exitCode, required bool gui}) {
+  print([Log("Error: "), ...input.map((Log item) => item..effects.addAll([1, 31]))]);
+  if (exitCode != null) quit(code: exitCode, mode: LogMode.plist, gui: gui);
 }
 
 void verboseerror(String location, List<Log> input) {
