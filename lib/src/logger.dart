@@ -4,6 +4,9 @@ import 'package:ocplist/src/classes.dart';
 import 'package:ocplist/src/main.dart';
 
 void print(List<Log> input, {bool? overrideOutputToController}) {
+  input = input.where((e) => e.input != null).toList();
+  if (input.isEmpty) return;
+
   if (overrideOutputToController ?? outputToController) {
     controller.sink.add(input);
   } else {
@@ -50,6 +53,8 @@ void title(List<Log> logs, {bool subtitle = false, bool linebreak = true, requir
 }
 
 void log(List<Log> logs) {
+  logs = logs.where((e) => e.input != null).toList();
+  if (logs.isEmpty) return;
   print(logs);
 }
 
