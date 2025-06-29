@@ -79,6 +79,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
   verbose([Log("Generating report...")]);
   log([Log.event(LogEvent.resultstart)]);
+  logversion("ocplist");
 
   if (directPlist) {
     plist = parsePlist(rest[0]);
@@ -374,7 +375,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     try {
       Map<String, int> counts = {};
       for (String item in args) {
-        print([Log("found duplicate: $item")]);
+        verbose([Log("found argument: $item")]);
         counts[item] = (counts[item] ?? 0) + 1;
       }
       for (String key in counts.keys.where((String key) => (counts[key] ?? 0) >= 2)) {

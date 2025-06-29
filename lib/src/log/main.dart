@@ -73,6 +73,10 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     oclog = await getLog(rest[0], gui: alt);
   }
 
+  verbose([Log("Generating report...")]);
+  log([Log.event(LogEvent.resultstart)]);
+  logversion("oclog");
+
   List<String> tools = [];
   List<String> drivers = [];
   List<OCLogEntry> entries = [];

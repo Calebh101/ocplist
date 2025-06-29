@@ -12,10 +12,19 @@ late ArgResults args;
 late bool outputToController;
 List<LogMode> lock = [];
 StreamController controller = StreamController.broadcast();
+String version = "1.0.0A";
 
 enum LogMode {
   plist,
   log,
+}
+
+void logversion(String mode) {
+  log([Log("Starting ocplist:$mode version $version...")]);;
+}
+
+String getOcPlistVersion() {
+  return version;
 }
 
 Future<String?> getData(String path, {required LogMode mode, required bool gui}) async {
