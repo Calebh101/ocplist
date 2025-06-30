@@ -14,7 +14,7 @@ mkdir -p "$www"
 cd gui
 echo "Building GUI for web..."
 flutter build web --base-href /ocplist/
-cp -r "build/web" "$www"
+cp -r build/web/* "$www"
 
 echo "Building CLI tool..."
 cd $dir
