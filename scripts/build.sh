@@ -6,6 +6,7 @@ bin="$out/bin"
 www="$dir/public"
 
 echo "Building OCPlist from $dir..."
+cd "$dir"
 rm -rf "$out"
 rm -rf "$www"
 mkdir -p "$bin"
@@ -22,4 +23,5 @@ cd $dir
 dart compile exe bin/ocplist.dart -o $bin/ocplist
 dart compile exe bin/oclog.dart -o $bin/oclog
 
+cd "$dir"
 echo "App built!"

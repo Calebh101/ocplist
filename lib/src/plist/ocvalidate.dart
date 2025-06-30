@@ -94,5 +94,5 @@ Future<File?> getOcValidateFile({bool skipVersionCheck = false}) async {
 }
 
 Future<void> ocvalidateweb(String raw) async {
-  verbose([Log("OCValidate is not supported on Web!")]);
+  log([Log("Warning", effects: [33]), Log(": "), Log("OCValidate is not supported on Web!", effects: [1, 33])]);
 }

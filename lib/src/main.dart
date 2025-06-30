@@ -45,17 +45,17 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
     try {
       Uri? uri = Uri.tryParse(path);
 
-      for (RegExpMatch match in RegExp(r"https:\/\/drive\.google\.com\/file\/d\/([^\/]+)(?:\/view)?\/?").allMatches(path)) {
+      for (RegExpMatch match in RegExp(r"https?:\/\/drive\.google\.com\/file\/d\/([^\/]+).*").allMatches(path)) {
         String? id = match.group(1);
         if (id == null) continue;
-        log([Log("Detected Google Drive file: $id")]);
+        log([Log("Detected Google Drive file: "), Log(id, effects: [1])]);
         uri = Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=$id&export=download") ?? uri;
       }
 
-      for (RegExpMatch match in RegExp(r"https:\/\/pastebin\.com\/([^\/]+)").allMatches(path)) {
+      for (RegExpMatch match in RegExp(r"https?:\/\/pastebin\.com\/([^\/]+).*").allMatches(path)) {
         String? id = match.group(1);
         if (id == null) continue;
-        log([Log("Detected Pastebin file: $id")]);
+        log([Log("Detected Pastebin file: "), Log(id)]);
         uri = Uri.tryParse("https://pastebin.com/raw/$id") ?? uri;
       }
 

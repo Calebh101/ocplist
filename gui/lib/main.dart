@@ -66,6 +66,7 @@ class _HomeState extends State<Home> {
   List<List<Log>> log = [];
   List<List<Log>> result = [];
   bool verbose = false;
+  bool force = false;
   bool showOcPlistLogs = false;
   ScrollController scrollController = ScrollController();
   TextEditingController textController = TextEditingController();
@@ -190,6 +191,7 @@ class _HomeState extends State<Home> {
         }, value: mode),
         actions: [
           PopupMenuButton<String>(
+            tooltip: "Extra Options",
             itemBuilder: (BuildContext context) {
               void share<T>(T name, String option, dynamic input) {
                 showDialogue(context: context, title: "OCPlist $option Log", copy: true, copyText: "$input", content: SingleChildScrollView(child: SelectableText("$input", style: TextStyle(fontSize: logFontSize, fontFamily: "monospace"))));
@@ -250,29 +252,53 @@ class _HomeState extends State<Home> {
                     clear();
                   },
                   value: "clear",
-                  child: Row(
-                    children: [
-                      Icon(Icons.clear),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text("Clear"),
-                      ),
-                    ],
+                  child: Tooltip(
+                    message: "Clear the console.",
+                    child: Row(
+                      children: [
+                        Icon(Icons.clear),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text("Clear"),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 PopupMenuItem(
                   onTap: () {
                     verbose = !verbose;
                   },
-                  value: "clear",
-                  child: Row(
-                    children: [
-                      Icon(verbose ? Icons.check_box_outlined : Icons.check_box_outline_blank),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text("Verbose"),
-                      ),
-                    ],
+                  value: "verbose",
+                  child: Tooltip(
+                    message: "Show extra debugging messages.",
+                    child: Row(
+                      children: [
+                        Icon(verbose ? Icons.check_box_outlined : Icons.check_box_outline_blank),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text("Verbose"),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                PopupMenuItem(
+                  onTap: () {
+                    force = !force;
+                  },
+                  value: "force",
+                  child: Tooltip(
+                    message: "Force scan the config, even if it has invalid configurations.",
+                    child: Row(
+                      children: [
+                        Icon(force ? Icons.check_box_outlined : Icons.check_box_outline_blank),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text("Force"),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 if (log.isNotEmpty && result.isNotEmpty)
@@ -342,13 +368,14 @@ class _HomeState extends State<Home> {
 
   void start({required double padding}) {
     print("running script as $mode");
+    if (log.isNotEmpty) log.addAll([[], [], []]);
 
     switch (mode) {
       case OCPlistMode.plist:
-        OcPlistGui(input: textController.text, verbose: verbose, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb);
+        OcPlistGui(input: textController.text, verbose: verbose, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb, force: force);
         break;
       case OCPlistMode.log:
-        OcLogGui(input: textController.text, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb);
+        OcLogGui(input: textController.text, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb, force: force);
         break;
     }
   }
@@ -384,6 +411,9 @@ TextSpan generateLog(List<Log> input, {required BuildContext context}) {
             case 1:
               effects.add(LogEffect.bold);
               break;
+            case 2:
+              effects.add(LogEffect.dim);
+              break;
             case 31:
               colors.add(Colors.red);
               break;
@@ -392,9 +422,6 @@ TextSpan generateLog(List<Log> input, {required BuildContext context}) {
               break;
             case 33:
               colors.add(Colors.yellow);
-              break;
-            case 2:
-              effects.add(LogEffect.dim);
               break;
             default:
               throw Exception("Invalid effect: $effect");
