@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:localpkg/dialogue.dart';
@@ -71,6 +72,7 @@ class _HomeState extends State<Home> {
   ScrollController scrollController = ScrollController();
   TextEditingController textController = TextEditingController();
   bool loggingresult = false;
+  String text = "";
 
   void add(List<Log> input) {
     List<Log>? resultS = [];
@@ -174,6 +176,9 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
+    RegExp pattern = RegExp(r"\n|\r");
+    textController.text = text.replaceAll(pattern, "");
+    bool multiline = text.contains(pattern);
     double padding = 8;
     int length = log.length * 2 - 1;
     if (length < 0) length = 0;
@@ -321,8 +326,43 @@ class _HomeState extends State<Home> {
           children: [
             Row(
               children: [
+                IconButton(
+                  icon: Icon(Icons.upload),
+                  onPressed: () async {
+                    XTypeGroup typeGroup = XTypeGroup(
+                      label: 'config.plist',
+                      extensions: ['plist', 'xml', 'txt'],
+                    );
+
+                    try {
+                      XFile? file = await openFile(acceptedTypeGroups: <XTypeGroup>[typeGroup]);
+                      if (file == null) return;
+                      String content = await file.readAsString();
+                      text = content;
+                      refresh();
+                    } catch (e) {
+                      error("Upload config.plist: $e");
+                      showSnackBar(context, "Unable to open file.");
+                      if (verbose) log.add([Log("Unable to open file: $e", effects: [31])]);
+                      refresh();
+                    }
+                  },
+                ),
                 Expanded(
-                  child: TextField(
+                  child: multiline ? Row(
+                    children: [
+                      Expanded(
+                        child: Text("Multiline file selected."),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.backspace),
+                        onPressed: () {
+                          text = "";
+                          refresh();
+                        },
+                      ),
+                    ],
+                  ) : TextField(
                     controller: textController,
                     decoration: InputDecoration(
                       hint: Text("URL, file path or full text..."),
@@ -372,10 +412,10 @@ class _HomeState extends State<Home> {
 
     switch (mode) {
       case OCPlistMode.plist:
-        OcPlistGui(input: textController.text, verbose: verbose, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb, force: force);
+        OcPlistGui(input: text, verbose: verbose, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb, force: force);
         break;
       case OCPlistMode.log:
-        OcLogGui(input: textController.text, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb, force: force);
+        OcLogGui(input: text, terminalwidth: terminalwidth(context: context, padding: padding), web: kIsWeb, force: force);
         break;
     }
   }

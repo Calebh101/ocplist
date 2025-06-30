@@ -108,8 +108,8 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
       }
 
       for (int i = 0; i < configuration.reason.length; i++) {
-        String reason = configuration.reason[i].map((item) => item.toString()).join("");
-        log([Log(reason)]);
+        List<Log> reason = configuration.reason[i];
+        log(reason);
       }
 
       if (i - 1 != unsupportedConfigurations.length) {
