@@ -3,14 +3,18 @@
 dir=$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")
 out="$dir/output"
 bin="$out/bin"
+www="$dir/public"
 
 echo "Building OCPlist from $dir..."
+rm -rf "$out"
+rm -rf "$www"
 mkdir -p "$bin"
+mkdir -p "$www"
 
 cd gui
 echo "Building GUI for web..."
 flutter build web --base-href /ocplist/
-cp -r "web" "$dir/public"
+cp -r "build/web" "$www"
 
 echo "Building CLI tool..."
 cd $dir
