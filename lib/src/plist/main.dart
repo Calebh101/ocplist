@@ -21,6 +21,9 @@ import 'package:xml/xml.dart';
   // 4: Invalid configuration
   // 5: Already started
 
+List<String> acpiText = ["SSDT", "SSDTs"];
+List<String> ocKeys = ["ACPI", "Booter", "DeviceProperties", "Kernel", "Misc", "NVRAM", "PlatformInfo", "UEFI"];
+
 Future<void> OcPlistGui({required String input, bool verbose = false, bool force = false, bool web = false, bool ocvalidate = true, required double Function() terminalwidth}) async {
   List<String> args = [input, if (verbose) "--verbose", if (force) "--force", if (ocvalidate == false) "--no-ocvalidate"];
   await main(args, alt: true, web: web, terminalwidth: terminalwidth);
@@ -133,7 +136,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     List<Map> add = (plist.json["Kernel"]["Add"] as List).whereType<Map>().toList();
     int count = add.length;
     int enabled = add.where((item) => item["Enabled"] == true).length;
-    title([Log("Kexts ($count kexts, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
+    title([Log("Kexts ($count ${countword(count: add.length, singular: "kext")}, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < add.length; i++) {
       Map item = add[i];
@@ -153,7 +156,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     List<Map> patch = (plist.json["Kernel"]["Block"] as List).whereType<Map>().toList();
     int count = patch.length;
     int enabled = patch.where((item) => item["Enabled"] == true).length;
-    title([Log("Kernel > Block ($count entries, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
+    title([Log("Kernel > Block ($count ${countword(count: count, singular: "entry", plural: "entries")}, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < count; i++) {
       Map item = patch[i];
@@ -171,7 +174,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     List<Map> patch = (plist.json["Kernel"]["Patch"] as List).whereType<Map>().toList();
     int count = patch.length;
     int enabled = patch.where((item) => item["Enabled"] == true).length;
-    title([Log("Kernel > Patch ($count entries, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
+    title([Log("Kernel > Patch ($count ${countword(count: count, singular: "entry", plural: "entries")}, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < count; i++) {
       Map item = patch[i];
@@ -189,7 +192,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     List<Map> add = (plist.json["ACPI"]["Add"] as List).whereType<Map>().toList();
     int count = add.length;
     int enabled = add.where((item) => item["Enabled"] == true).length;
-    title([Log("ACPI > Add ($count binaries, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
+    title([Log("ACPI > Add ($count ${countword(count: count, singular: acpiText[0], plural: acpiText[1])}, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < count; i++) {
       Map item = add[i];
@@ -204,7 +207,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     List<Map> patch = (plist.json["ACPI"]["Patch"] as List).whereType<Map>().toList();
     int count = patch.length;
     int enabled = patch.where((item) => item["Enabled"] == true).length;
-    title([Log("ACPI > Patch ($count entries, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
+    title([Log("ACPI > Patch ($count ${countword(count: count, singular: "entry", plural: "entries")}, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < count; i++) {
       Map item = patch[i];
@@ -222,7 +225,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     List<Map> drivers = (plist.json["UEFI"]["Drivers"] as List).whereType<Map>().toList();
     int count = drivers.length;
     int enabled = drivers.where((item) => item["Enabled"] == true).length;
-    title([Log("Drivers ($count drivers, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
+    title([Log("Drivers ($count ${countword(count: count, singular: "driver")}, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < count; i++) {
       Map item = drivers[i];
@@ -239,7 +242,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     List<Map> tools = (plist.json["Misc"]["Tools"] as List).whereType<Map>().toList();
     int count = tools.length;
     int enabled = tools.where((item) => item["Enabled"] == true).length;
-    title([Log("Tools ($count tools, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
+    title([Log("Tools ($count ${countword(count: count, singular: "tool")}, $enabled enabled)")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < count; i++) {
       Map item = tools[i];
@@ -255,7 +258,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   try {
     List<Map<String, dynamic>> properties = getDevProps(plist.json);
     Map<String, List<List<Log>>> logdata = {};
-    title([Log("DeviceProperties (${properties.length} devices)")], overrideTerminalWidth: terminalwidth);
+    title([Log("DeviceProperties (${properties.length} ${countword(count: properties.length, singular: "device")})")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < properties.length; i++) {
       String device = properties[i]["key"];
@@ -385,7 +388,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
       verboseerror("boot args duplicates", [Log(e)]);
     }
 
-    title([Log("Boot Arguments")], overrideTerminalWidth: terminalwidth);
+    title([Log("Boot Arguments (${args.length} ${countword(count: args.length, singular: "arg")})")], overrideTerminalWidth: terminalwidth);
     print([Log("boot-args: "), Log(variable.replaceAll("\n", "[\\n]"), effects: [1])]);
     print([Log("Present in NVRAM > Delete: "), Log(delete ? "Yes" : "No", effects: [1, delete ? 32 : 31])]);
 
@@ -511,7 +514,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
       return key;
     }
 
-    title([Log("SMBIOS")], overrideTerminalWidth: terminalwidth);
+    title([Log("PlatformInfo")], overrideTerminalWidth: terminalwidth);
     ["SystemProductName", "SystemSerialNumber", "ROM", "SystemUUID", "SpoofVendor"].map((dynamic item) => show(item)).toList();
   } catch (e) {
     verboseerror("platforminfo", [Log(e)]);
@@ -605,6 +608,19 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     verboseerror("sample keys", [Log(e)]);
   }
 
+  try {
+    List<String> keys = plist.json.keys.whereType<String>().toList();
+    List<String> found = keys.where((String key) => !ocKeys.contains(key)).toList();
+
+    if (found.isNotEmpty) {
+      log([Log("Extra keys: "), Log(found.length, effects: [1]), Log(" found: "), Log(found.join(", "), effects: [1])]);
+    } else {
+      log([Log("Extra keys: None found")]);
+    }
+  } catch (e) {
+    verboseerror("extra kekys", [Log(e)]);
+  }
+
   List<Log>? countEntries(List<String> keys, {required String singular, String? plural, bool useEnabled = true}) {
     try {
       List<Map> value = ((plist.json * keys) as List).whereType<Map>().toList();
@@ -617,7 +633,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     }
   }
 
-  List<List<Log>> summaryraw = [countEntries(["Kernel", "Add"], singular: "kext"), countEntries(["ACPI", "Add"], singular: "ACPI", plural: "ACPI"), countEntries(["UEFI", "Drivers"], singular: "driver"), countEntries(["Misc", "Tools"], singular: "tool")].whereType<List<Log>>().toList();
+  List<List<Log>> summaryraw = [countEntries(["Kernel", "Add"], singular: "kext"), countEntries(["ACPI", "Add"], singular: "ACPI", plural: acpiText[1]), countEntries(["UEFI", "Drivers"], singular: "driver"), countEntries(["Misc", "Tools"], singular: "tool"), [Log(unsupportedConfigurations.length, effects: [1]), Log(" ${countword(count: unsupportedConfigurations.length, singular: "issue")}")]].whereType<List<Log>>().toList();
   List<Log> summary = [];
 
   for (int i = 0; i < summaryraw.length; i++) {

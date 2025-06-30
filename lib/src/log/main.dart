@@ -146,11 +146,20 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   })();
 
   if (drivers.isNotEmpty) {
-    title([Log("Drivers (${drivers.length})")], overrideTerminalWidth: terminalwidth);
+    title([Log("Drivers (${drivers.length} ${countword(count: drivers.length, singular: "driver")})")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < drivers.length; i++) {
       String driver = drivers[i];
       log([Log("${i + 1}. "), Log(driver, effects: [1])]);
+    }
+  }
+
+  if (tools.isNotEmpty) {
+    title([Log("Tools (${tools.length} ${countword(count: tools.length, singular: "tool")})")], overrideTerminalWidth: terminalwidth);
+
+    for (int i = 0; i < tools.length; i++) {
+      String tool = tools[i];
+      log([Log("${i + 1}. "), Log(tool, effects: [1])]);
     }
   }
 
@@ -172,7 +181,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   log([Log("Boot arguments: "), Log(bootargs ?? "None", effects: [1])]);
 
   if (count > 0) {
-    title([Log("Last $count Lines")], overrideTerminalWidth: terminalwidth);
+    title([Log("Last $count ${countword(count: count, singular: "Line")}")], overrideTerminalWidth: terminalwidth);
 
     for (int i = 0; i < count; i++) {
       int index = oclog.logs.length - (count - i);

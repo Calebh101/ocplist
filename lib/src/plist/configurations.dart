@@ -8,7 +8,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
   List<UnsupportedConfiguration> results = [];
 
   try {
-    List<String> keys = ["ACPI", "Booter", "DeviceProperties", "Kernel", "Misc", "NVRAM", "PlatformInfo", "UEFI"];
+    List<String> keys = ocKeys;
     List<String> cloverKeys = ["ACPI", "Boot", "BootGraphics", "CPU", "Devices", "DisableDrivers?", "GUI", "Graphics", "KernelAndKextPatches", "Quirks", "RtVariables", "SMBIOS", "SMBIOS_capitan", "SMBIOS_ventura", "SystemParameters"];
     List<String> presentKeys = [];
 
