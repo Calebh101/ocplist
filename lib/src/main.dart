@@ -45,24 +45,27 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
     try {
       Uri? uri = Uri.tryParse(path);
 
-      for (RegExpMatch match in RegExp(r"https?:\/\/drive\.google\.com\/file\/d\/([^\/]+).*").allMatches(path)) {
-        String? id = match.group(1);
-        if (id == null) continue;
-        log([Log("Detected Google Drive file: "), Log(id, effects: [1])]);
-        uri = Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=$id&export=download") ?? uri;
+      void match(String name, RegExp regex, {required Uri? Function(List<String>) callback, int groups = 1}) {
+        try {
+          List<String> match = regex.allMatches(path).first.groups(List.generate(groups, (i) => i + 1)).whereType<String>().toList();
+          if (match.length == groups) {
+            log([Log("Detected "), Log(name, effects: [1]), Log(" file: "), Log(match.join(" - "), effects: [1])]);
+            Uri? result = callback.call(match);
+            if (result != null) uri = result;
+          }
+        } catch (e) {
+          verboseerror("matchUrl[$name]", [Log(e)]);
+        }
       }
 
-      for (RegExpMatch match in RegExp(r"https?:\/\/pastebin\.com\/([^\/]+).*").allMatches(path)) {
-        String? id = match.group(1);
-        if (id == null) continue;
-        log([Log("Detected Pastebin file: "), Log(id)]);
-        uri = Uri.tryParse("https://pastebin.com/raw/$id") ?? uri;
-      }
+      match("Google Drive", RegExp(r"https?:\/\/drive\.google\.com\/file\/d\/([^\/]+).*"), callback: (List<String> id) => Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=${id[0]}&export=download"));
+      match("Pastebin", RegExp(r"https?:\/\/pastebin\.com\/([^\/]+).*"), callback: (List<String> id) => Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=$id&export=download"));
+      match("GitHub", RegExp(r"^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$"), callback: (List<String> id) => Uri.tryParse("https://raw.githubusercontent.com/${id[0]}/${id[1]}/refs/heads/${id[2]}/${id[3]}"));
 
       if (uri != null) {
-        print([Log("Downloading file...")]);
         uri = Uri.parse("https://corsproxy.io/?$uri"); // I know not the preferred solution, I'll change this later
-        http.Response response = await http.get(uri).timeout(Duration(seconds: 10));
+        print([Log("Downloading file from "), Log(uri, effects: [1]), Log("...")]);
+        http.Response response = await http.get(uri!).timeout(Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           verbose([Log("Found file: $uri")]);

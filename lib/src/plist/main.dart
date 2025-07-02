@@ -120,6 +120,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     print([Log("Found "), Log("${unsupportedConfigurations.length} unsupported configurations", effects: [1]), Log(" with "), Log("$warnings ${countword(count: warnings, singular: "warning")}", effects: [1, 33]), Log(" and "), Log("$errors ${countword(count: errors, singular: "error")}", effects: [1, 31]), Log("!")]);
 
     if (errors > 0 && args["force"] != true) {
+      log([Log.event(LogEvent.resultend)]);
       quit(code: 4, mode: LogMode.plist, gui: alt);
     }
   }

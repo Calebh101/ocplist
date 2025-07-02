@@ -15,6 +15,7 @@ FontWeight logBoldedWeight = kIsWeb ? FontWeight.w600 : FontWeight.w700;
 String fontFamily = "Hack";
 List<String> fontFamilyFallbacks = ["monospace", "Courier New"];
 Map<OCPlistMode, List<List<Log>>> allLogs = {};
+String text = "";
 
 void main() {
   runApp(const MyApp());
@@ -72,7 +73,6 @@ class _HomeState extends State<Home> {
   ScrollController scrollController = ScrollController();
   TextEditingController textController = TextEditingController();
   bool loggingresult = false;
-  String text = "";
 
   void add(List<Log> input) {
     List<Log>? resultS = [];
@@ -80,6 +80,7 @@ class _HomeState extends State<Home> {
     if (showOcPlistLogs) print("OCPlist: ${input.map((input) => input.toString()).join("")}");
 
     for (Log item in input) {
+      if (item.event != null) print(item.event);
       if (item.event == LogEvent.resultstart) {
         loggingresult = true;
         result = [];
@@ -248,7 +249,7 @@ class _HomeState extends State<Home> {
                   }
                 }
 
-                return [...wholeLog, PopupMenuDivider(), ...resultLog];
+                return [...wholeLog, if (resultLog.isNotEmpty) PopupMenuDivider(), ...resultLog];
               }
 
               return [
@@ -306,7 +307,6 @@ class _HomeState extends State<Home> {
                     ),
                   ),
                 ),
-                if (log.isNotEmpty && result.isNotEmpty)
                 ...[
                   PopupMenuDivider(),
                   ...generateExportEntries<String>(entries: [
@@ -365,8 +365,12 @@ class _HomeState extends State<Home> {
                   ) : TextField(
                     controller: textController,
                     decoration: InputDecoration(
-                      hint: Text("URL, file path or full text..."),
+                      hint: Text("URL or full text..."),
                     ),
+                    onChanged: (String value) {
+                      text = value.replaceAll(RegExp(" " * 2), "\n");
+                      refresh();
+                    },
                   ),
                 ),
                 IconButton(
