@@ -202,6 +202,18 @@ class OCLogEntry {
   int get hashCode => entry.hashCode ^ type.hashCode ^ path.hashCode;
 }
 
+class OCLogKext {
+  String name;
+  String version;
+
+  OCLogKext(this.name, this.version);
+
+  @override
+  String toString() {
+    return "$name v$version";
+  }
+}
+
 class OCLogTimestamp {
   int seconds;
   int milliseconds;

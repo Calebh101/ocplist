@@ -24,6 +24,10 @@ import 'package:xml/xml.dart';
 List<String> acpiText = ["SSDT", "SSDTs"];
 List<String> ocKeys = ["ACPI", "Booter", "DeviceProperties", "Kernel", "Misc", "NVRAM", "PlatformInfo", "UEFI"];
 
+List<String> ocSampleKeys = [...List.generate(4, (int i) {
+  return "#WARNING - ${i + 1}";
+})];
+
 Future<void> OcPlistGui({required String input, bool verbose = false, bool force = false, bool web = false, bool ocvalidate = true, required double Function() terminalwidth}) async {
   List<String> args = [input, if (verbose) "--verbose", if (force) "--force", if (ocvalidate == false) "--no-ocvalidate"];
   await main(args, alt: true, web: web, terminalwidth: terminalwidth);
@@ -273,6 +277,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
       if (device == "PciRoot(0x0)/Pci(0x2,0x0)") {
           for (String key in value.keys) {
+            verbose([Log("found property: $key (${value.keys.length})")]);
             dynamic input;
             bool isData = false;
 
@@ -588,10 +593,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   }
 
   try {
-    List<String> keys = List.generate(4, (int i) {
-      return "#WARNING - ${i + 1}";
-    });
-
+    List<String> keys = ocSampleKeys;
     List<String> found = [];
 
     for (String key in keys) {
@@ -611,7 +613,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
   try {
     List<String> keys = plist.json.keys.whereType<String>().toList();
-    List<String> found = keys.where((String key) => !ocKeys.contains(key)).toList();
+    List<String> found = keys.where((String key) => !ocKeys.contains(key) && !ocSampleKeys.contains(key)).toList();
 
     if (found.isNotEmpty) {
       log([Log("Extra keys: "), Log(found.length, effects: [1]), Log(" found: "), Log(found.join(", "), effects: [1])]);

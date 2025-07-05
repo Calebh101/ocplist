@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:args/args.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:ocplist/src/classes.dart';
 import 'package:ocplist/src/logger.dart';
 import 'package:path/path.dart' as Path;
+import 'package:plist_parser/plist_parser.dart';
 
 late ArgResults args;
 late bool outputToController;
@@ -60,16 +63,92 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
 
       match("Google Drive", RegExp(r"https?:\/\/drive\.google\.com\/file\/d\/([^\/]+).*"), callback: (List<String> id) => Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=${id[0]}&export=download"));
       match("Pastebin", RegExp(r"https?:\/\/pastebin\.com\/([^\/]+).*"), callback: (List<String> id) => Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=$id&export=download"));
-      match("GitHub", RegExp(r"^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$"), callback: (List<String> id) => Uri.tryParse("https://raw.githubusercontent.com/${id[0]}/${id[1]}/refs/heads/${id[2]}/${id[3]}"));
+      match("GitHub File", RegExp(r"^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/(blob|tree)\/([^\/]+)\/(.+)$"), callback: (List<String> id) => Uri.tryParse("https://raw.githubusercontent.com/${id[0]}/${id[1]}/refs/heads/${id[3]}/${id[4]}"), groups: 5);
+      match("GitHub Repo", RegExp(r"^https:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/(blob|tree)\/([^\/]+))?\/?$"), callback: (List<String> id) => Uri.tryParse("https://github.com/${id[0]}/${id[1]}/archive/refs/heads/${id[3]}.zip"), groups: 4);
 
       if (uri != null) {
         uri = Uri.parse("https://corsproxy.io/?$uri"); // I know not the preferred solution, I'll change this later
         print([Log("Downloading file from "), Log(uri, effects: [1]), Log("...")]);
-        http.Response response = await http.get(uri!).timeout(Duration(seconds: 10));
+        http.Response response = await http.get(uri!).timeout(Duration(seconds: 30));
 
         if (response.statusCode == 200) {
           verbose([Log("Found file: $uri")]);
-          raw = utf8.decode(response.bodyBytes);
+          try {
+            try {
+              PlistParser().parse(response.body);
+              raw = response.body;
+            } catch (e) {
+              verboseerror("getData uri PlistParser.parse", [Log(e)]);
+              raw = utf8.decode(response.bodyBytes);
+            }
+          } catch (e) {
+            try {
+              verboseerror("getData uri utf8.decode", [Log(e)]);
+              Archive archive = ZipDecoder().decodeBytes(response.bodyBytes);
+              verbose([Log("Found archive: ${archive.files.length} files")]);
+              List<ArchiveFile> found = [];
+              ArchiveFile? selected;
+
+              for (ArchiveFile file in archive.files) {
+                Iterable<RegExpMatch> matches = RegExp(r".*config.*\.plist", caseSensitive: false).allMatches(file.name);
+                if (matches.isNotEmpty) found.add(file);
+              }
+
+              if (found.isEmpty) {
+                found.add(archive.first);
+              }
+
+              log([Log("Found "), Log(found.length, effects: [1]), Log(" matching ${countword(count: found.length, singular: "file")} in archive")]);
+              if (found.length > 1) {
+                newline();
+                log([Log("We found "), Log(found.length, effects: [1]), Log(" config.plists. Please select a config.plist to use.")]);
+                newline();
+
+                for (int i = 0; i < found.length; i++) {
+                  ArchiveFile file = found[i];
+                  log([Log("${i + 1}. "), Log(file.name, effects: [1]), Log(" (last modified "), Log(DateFormat("M/dd/yyyy h:mm a").format(file.lastModDateTime), effects: [1]), Log(")")]);
+                }
+
+                newline();
+                int i = 0;
+
+                while (selected == null) {
+                  if (i == 0) {
+                    stdout.write("Please type the file path or index of the chosen config.plist. Type q to quit.\nInput   >> ");
+                  } else {
+                    stdout.write("Invalid >> ");
+                  }
+
+                  String? input = stdin.readLineSync();
+
+                  if (input != null) {
+                    input = input.toLowerCase();
+
+                    if (input == "q" || input == "") {
+                      quit(mode: mode, gui: gui);
+                    } else {
+                      i++;
+
+                      if (int.tryParse(input) != null) {
+                        int x = int.parse(input);
+                        if (x <= found.length && x > 0) {
+                          selected = found[x - 1];
+                          stdout.writeln();
+                        }
+                      }
+                    }
+                  }
+                }
+              } else {
+                selected = found.first;
+              }
+
+              verbose([Log("Parsing file ${selected.name}...")]);
+              raw = utf8.decode(selected.readBytes()!);
+            } catch (e) {
+              verboseerror("getData uri zip.decode", [Log(e)]);
+            }
+          }
         } else {
           error([Log("Got bad response: ${response.body} (status code: ${response.statusCode})")], exitCode: 2, mode: mode, gui: gui);
         }
@@ -80,7 +159,7 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
   }
 
   if (raw == null) {
-    error([Log("Invalid file path: $path")], exitCode: 3, mode: mode, gui: gui);
+    error([Log("Invalid file: $path")], exitCode: 3, mode: mode, gui: gui);
   } else {
     return raw;
   }

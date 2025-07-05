@@ -80,6 +80,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   List<String> tools = [];
   List<String> drivers = [];
   List<OCLogEntry> entries = [];
+  List<OCLogKext> kexts = [];
 
   String? version = (() {
     try {
@@ -94,6 +95,14 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
   if (version == null) {
     error([Log("This OpenCore log is not a debug log!", effects: [31, 1])], exitCode: 1, mode: LogMode.log, gui: alt);
+  }
+
+  for (String item in oclog.logs.where((String item) => RegExp(r"Prelinked injection .+\.kext v.+").hasMatch(item))) {
+    String line = item.split("Prelinked injection")[1].trim();
+    verbose([Log("found kext: $line")]);
+    String name = line.split(" ")[0];
+    String version = line.split("v").last;
+    kexts.add(OCLogKext(name, version));
   }
 
   for (String item in oclog.logs.where((String item) => RegExp(r"Adding custom entry .+\.efi \(tool\|B:0\)").hasMatch(item))) {
@@ -117,10 +126,17 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   }
 
   entries = entries.toSet().toList();
-
-  String bootedline = oclog.logs.firstWhere((String item) => item.contains("Should boot from"));
-  String? booted = RegExp(r'\b([A-Z][a-zA-Z]+)\s*\(').firstMatch(bootedline)?.group(1);
   bool showedMenu = oclog.logs.any((String item) => item.contains("OCB: Showing menu... "));
+
+  String? booted = (() {
+    try {
+      String bootedLine = oclog.logs.firstWhere((String item) => item.contains("Should boot from"));
+      return RegExp(r'\b([A-Z][a-zA-Z]+)\s*\(').firstMatch(bootedLine)?.group(1);
+    } catch (e) {
+      verboseerror("booted", [Log(e)]);
+      return null;
+    }
+  })();
 
   String? bootargs = (() {
     try {
@@ -160,6 +176,15 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     for (int i = 0; i < tools.length; i++) {
       String tool = tools[i];
       log([Log("${i + 1}. "), Log(tool, effects: [1])]);
+    }
+  }
+
+  if (kexts.isNotEmpty) {
+    title([Log("Kexts (${kexts.length} ${countword(count: kexts.length, singular: "kext")})")], overrideTerminalWidth: terminalwidth);
+
+    for (int i = 0; i < kexts.length; i++) {
+      OCLogKext kext = kexts[i];
+      log([Log("${i + 1}. "), Log(kext, effects: [1])]);
     }
   }
 
