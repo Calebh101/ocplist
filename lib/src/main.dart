@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:ocplist/src/classes.dart';
 import 'package:ocplist/src/logger.dart';
-import 'package:path/path.dart' as Path;
+import 'package:path/path.dart' as p;
 import 'package:plist_parser/plist_parser.dart';
 
 late ArgResults args;
@@ -16,6 +16,7 @@ late bool outputToController;
 List<LogMode> lock = [];
 StreamController controller = StreamController.broadcast();
 String version = "1.0.0A";
+int? timeout;
 
 enum LogMode {
   plist,
@@ -32,6 +33,7 @@ String getOcPlistVersion() {
 
 Future<String?> getData(String path, {required LogMode mode, required bool gui}) async {
   String? raw;
+  String reason = "error";
   verbose([Log("Judging path $path (${path.runtimeType})")]);
 
   try {
@@ -48,28 +50,49 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
     try {
       Uri? uri = Uri.tryParse(path);
 
-      void match(String name, RegExp regex, {required Uri? Function(List<String>) callback, int groups = 1}) {
+      FutureOr<void> match(String name, RegExp regex, {required FutureOr<String> Function(List<String>) callback}) async {
         try {
-          List<String> match = regex.allMatches(path).first.groups(List.generate(groups, (i) => i + 1)).whereType<String>().toList();
-          if (match.length == groups) {
-            log([Log("Detected "), Log(name, effects: [1]), Log(" file: "), Log(match.join(" - "), effects: [1])]);
-            Uri? result = callback.call(match);
-            if (result != null) uri = result;
-          }
+          RegExpMatch firstMatch = regex.allMatches(path).first;
+          List<String> match = firstMatch.groups(List.generate(firstMatch.groupCount, (i) => i + 1)).whereType<String>().toList();
+          String result = await callback.call(match);
+          Uri url = Uri.parse(result);
+          uri = url;
+          log([Log("Detected "), Log(name, effects: [1]), Log(" file: "), Log(match.join(" - "), effects: [1])]);
         } catch (e) {
           verboseerror("matchUrl[$name]", [Log(e)]);
         }
       }
 
-      match("Google Drive", RegExp(r"https?:\/\/drive\.google\.com\/file\/d\/([^\/]+).*"), callback: (List<String> id) => Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=${id[0]}&export=download"));
-      match("Pastebin", RegExp(r"https?:\/\/pastebin\.com\/([^\/]+).*"), callback: (List<String> id) => Uri.tryParse("https://drive.usercontent.google.com/u/0/uc?id=$id&export=download"));
-      match("GitHub File", RegExp(r"^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/(blob|tree)\/([^\/]+)\/(.+)$"), callback: (List<String> id) => Uri.tryParse("https://raw.githubusercontent.com/${id[0]}/${id[1]}/refs/heads/${id[3]}/${id[4]}"), groups: 5);
-      match("GitHub Repo", RegExp(r"^https:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/(blob|tree)\/([^\/]+))?\/?$"), callback: (List<String> id) => Uri.tryParse("https://github.com/${id[0]}/${id[1]}/archive/refs/heads/${id[3]}.zip"), groups: 4);
+      await match("Google Drive", RegExp(r"https?:\/\/drive\.google\.com\/file\/d\/([^\/]+).*"), callback: (List<String> id) => "https://drive.usercontent.google.com/u/0/uc?id=${id[0]}&export=download");
+      await match("Pastebin", RegExp(r"https?:\/\/pastebin\.com\/([^\/]+).*"), callback: (List<String> id) => "https://drive.usercontent.google.com/u/0/uc?id=$id&export=download");
+      await match("GitHub File", RegExp(r"^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/(blob|tree)\/([^\/]+)\/(.+)$"), callback: (List<String> id) => "https://raw.githubusercontent.com/${id[0]}/${id[1]}/refs/heads/${id[3]}/${id[4]}");
+
+      await match("GitHub Repo", RegExp(r"^https:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/(blob|tree)\/([^\/]+))?\/?$"), callback: (List<String> id) async {
+        String owner = id[0];
+        String repo = id[1];
+
+        return "https://github.com/$owner/$repo/archive/refs/heads/${id.elementAtOrNull(3) ?? await (() async {
+          log([Log("Finding default branch of "), Log("$owner/$repo", effects: [1]), Log("...")]);
+          Uri url = Uri.parse('https://api.github.com/repos/$owner/$repo');
+          http.Response response = await http.get(url);
+          String branch;
+
+          if (response.statusCode == 200) {
+            Map data = jsonDecode(response.body);
+            branch = data['default_branch'];
+          } else {
+            verboseerror("matchUrl[GitHub Repo].elementAtOrNull(3).branchChecker.postResponse", [Log("Status code was ${response.statusCode}")]);
+            branch = "master";
+          }
+
+          return branch;
+        })()}.zip";
+      });
 
       if (uri != null) {
         uri = Uri.parse("https://corsproxy.io/?$uri"); // I know not the preferred solution, I'll change this later
         print([Log("Downloading file from "), Log(uri, effects: [1]), Log("...")]);
-        http.Response response = await http.get(uri!).timeout(Duration(seconds: 30));
+        http.Response response = timeout != null ? await http.get(uri!).timeout(Duration(seconds: timeout!)) : await http.get(uri!);
 
         if (response.statusCode == 200) {
           verbose([Log("Found file: $uri")]);
@@ -112,30 +135,34 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
                 newline();
                 int i = 0;
 
-                while (selected == null) {
-                  if (i == 0) {
-                    stdout.write("Please type the file path or index of the chosen config.plist. Type q to quit.\nInput   >> ");
-                  } else {
-                    stdout.write("Invalid >> ");
-                  }
-
-                  String? input = stdin.readLineSync();
-
-                  if (input != null) {
-                    input = input.toLowerCase();
-
-                    if (input == "q" || input == "") {
-                      quit(mode: mode, gui: gui);
+                if (gui) {} else {
+                  while (selected == null) {
+                    if (i == 0) {
+                      stdout.write("Please type the file path or index of the chosen config.plist. Type q to quit.\nInput   >> ");
                     } else {
-                      i++;
+                      stdout.write("Invalid >> ");
+                    }
 
-                      if (int.tryParse(input) != null) {
-                        int x = int.parse(input);
-                        if (x <= found.length && x > 0) {
-                          selected = found[x - 1];
-                          stdout.writeln();
+                    String? input = stdin.readLineSync();
+
+                    if (input != null) {
+                      input = input.toLowerCase();
+
+                      if (input == "q" || input == "") {
+                        quit(mode: mode, gui: gui);
+                      } else {
+                        i++;
+
+                        if (int.tryParse(input) != null) {
+                          int x = int.parse(input);
+                          if (x <= found.length && x > 0) {
+                            selected = found[x - 1];
+                            stdout.writeln();
+                          }
                         }
                       }
+                    } else {
+                      selected = found.first;
                     }
                   }
                 }
@@ -143,7 +170,7 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
                 selected = found.first;
               }
 
-              verbose([Log("Parsing file ${selected.name}...")]);
+              verbose([Log("Parsing file ${selected!.name}...")]);
               raw = utf8.decode(selected.readBytes()!);
             } catch (e) {
               verboseerror("getData uri zip.decode", [Log(e)]);
@@ -155,11 +182,12 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
       }
     } catch (e) {
       verboseerror("getData uri", [Log(e)]);
+      if (e is TimeoutException) reason = "Timeout at ${e.duration?.inSeconds ?? 0}s";
     }
   }
 
   if (raw == null) {
-    error([Log("Invalid file: $path")], exitCode: 3, mode: mode, gui: gui);
+    error([Log("Invalid file: $path ($reason)")], exitCode: 3, mode: mode, gui: gui);
   } else {
     return raw;
   }
@@ -223,7 +251,7 @@ String getMacOSVersionForDarwinVersion(String darwin) {
 
 Directory getDataDirectory() {
   String home = (Platform.isWindows ? Platform.environment['USERPROFILE'] : Platform.environment['HOME'])!;
-  String path = Path.joinAll([home, ".ocplist"]);
+  String path = p.joinAll([home, ".ocplist"]);
   return Directory(path);
 }
 
