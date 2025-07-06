@@ -2135,7 +2135,7 @@ const RESOURCES = {"assets/assets/fonts/Hack-Regular.ttf": "d9ab192896af1ab48c76
 "canvaskit/chromium/canvaskit.js.symbols": "b61b5f4673c9698029fa0a746a9ad581",
 "canvaskit/chromium/canvaskit.wasm": "f504de372e31c8031018a9ec0a9ef5f0",
 "canvaskit/canvaskit.wasm": "7a3f4ae7d65fc1de6a6e7ddd3224bc93",
-"flutter_bootstrap.js": "52301ba4273bc84608997222185fe3ae",
+"flutter_bootstrap.js": "7f16fa3efd238f444fe6ecd1cec49952",
 "main.dart.js": "db4990620175773233d070703da131fa",
 "index.html": "0f34ddd7c67e839a6c5dd95cdf44e10c",
 "/": "0f34ddd7c67e839a6c5dd95cdf44e10c",
