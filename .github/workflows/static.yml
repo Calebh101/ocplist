@@ -1,42 +1,70 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
-
+name: ocplist-Action
 on:
-  # Runs on pushes targeting the default branch
+  pull_request:
+    branches:
+      - main
   push:
-    branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches:
+      - main
   workflow_dispatch:
-
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+concurrency:
+  group: pages
+  cancel-in-progress: false
 permissions:
   contents: read
   pages: write
   id-token: write
-
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
 jobs:
-  # Single deploy job since we're just deploying
-  deploy:
+  pages-deploy-Blg4II:
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+      url: "${{ steps.deployment.outputs.page_url }}"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: "actions/checkout@v4"
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: "actions/configure-pages@v5"
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: "actions/upload-pages-artifact@v3"
         with:
-          path: 'public/'
+          path: public/
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: "actions/deploy-pages@v4"
+  dart-analyze-5ZJMiZ:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "dart-lang/setup-dart@v1"
+      - name: Dart Analyze at /
+        run: |-
+          dart pub get
+          dart format --output=none --set-exit-if-changed .
+          dart analyze
+  dart-build-eVRhI4:
+    runs-on: "${{ matrix.os }}"
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macOS-latest
+        include:
+          - os: ubuntu-latest
+            output-name: ocplist-ubuntu
+          - os: windows-latest
+            output-name: ocplist-windows
+          - os: macOS-latest
+            output-name: ocplist-macOS
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "dart-lang/setup-dart@v1"
+      - name: Dart Build at /
+        run: |-
+          dart pub get
+          dart compile exe bin/main.dart -o build/${{ matrix.output-name }}
+      - uses: "actions/upload-artifact@v4"
+        with:
+          name: native-executables
+          path: "build/${{ matrix.output-name }}"
