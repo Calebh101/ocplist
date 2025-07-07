@@ -91,7 +91,9 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   if (directPlist) {
     plist = parsePlist(rest[0]);
   } else {
-    plist = await getPlist(rest[0], alt: alt);
+    String path = rest[0].replaceAll(RegExp("^[\\'\"]"), '').replaceAll(RegExp("[\\'\"]\$"), '');
+    verbose([Log("Path: "), Log(path.replaceAll("\"", "DOUBLEQUOTE").replaceAll("'", "SINGLEQUOTE"))]);
+    plist = await getPlist(path, alt: alt);
   }
 
   List unsupportedConfigurations = findUnsupportedConfigurations(plist.raw, plist.json);
@@ -307,7 +309,16 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
           }
         })();
 
-        addlog([Log("Layout ID: "), Log("${isData ? getHex(id) : id}", effects: [1]), if (isData) ...[Log(" ("), Log(ByteData.sublistView(id).getInt32(0, Endian.big), effects: [1]), Log(")")], Log(" ("), Log(getType(id), effects: [1]), Log(")")]);
+        int? decimal = (() {
+          try {
+            return ByteData.sublistView(id).getInt32(0, Endian.big);
+          } catch (e) {
+            verboseerror("deviceproperties decimal", [Log(e)]);
+            return null;
+          }
+        })();
+
+        addlog([Log("Layout ID: "), Log("${isData ? getHex(id) : id}", effects: [1]), if (isData) ...[Log(" ("), Log(decimal ?? "invalid", effects: [1]), Log(")")], Log(" ("), Log(getType(id), effects: [1]), Log(")")]);
       }
     }
 
@@ -333,12 +344,12 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
       log([Log("Other Devices", effects: [1])]);
     }
 
-    for (int i = 0; i < properties.length; i++) {
+    for (int i = 0; i < notIncluded.length; i++) {
       String key = notIncluded[i];
       log([Log("${i + 1}. "), Log(key, effects: [1])]);
     }
-  } catch (e) {
-    verboseerror("deviceproperties", [Log(e)]);
+  } catch (e, t) {
+    verboseerror("deviceproperties", [Log(e), Log(t)]);
   }
 
   try {
@@ -527,6 +538,25 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   }
 
   title([Log("Misc")], overrideTerminalWidth: terminalwidth);
+
+  try { // Credit: recycledplist
+    List<Map> patch = plist["Kernel"]["Patch"];
+    bool status = false;
+
+    for (Map x in patch) {
+      String? comment = x["Comment"];
+      if (comment == null) continue;
+
+      if (comment.contains("AuthenticAMD")) {
+        status = true;
+        break;
+      }
+    }
+
+    log([Log("Is AMD: "), Log.yesNo(status)]);
+  } catch (e) {
+    verboseerror("amd", [Log(e)]);
+  }
 
   try {
     List<String> keys = ["Misc", "Security", "SecureBootModel"];
@@ -720,7 +750,7 @@ List<Map<String, dynamic>> getDevProps(Map plist) {
 }
 
 Future<Plist> getPlist(String path, {required bool alt}) async {
-  String? raw = await getData(path, mode: LogMode.plist, gui: alt);
+  String? raw = await getData(path, mode: LogMode.plist, gui: alt, fileRegex: RegExp(r".*config.*\.plist"));
   
   if (raw == null) {
     error([Log("Invalid plist path: $path")], mode: LogMode.plist, gui: alt);

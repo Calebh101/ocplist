@@ -9,7 +9,6 @@ import 'package:intl/intl.dart';
 import 'package:ocplist/src/classes.dart';
 import 'package:ocplist/src/logger.dart';
 import 'package:path/path.dart' as p;
-import 'package:plist_parser/plist_parser.dart';
 
 late ArgResults args;
 late bool outputToController;
@@ -31,16 +30,21 @@ String getOcPlistVersion() {
   return version;
 }
 
-Future<String?> getData(String path, {required LogMode mode, required bool gui}) async {
+Future<String?> getData(String path, {required LogMode mode, required bool gui, required RegExp fileRegex}) async {
   String? raw;
   String reason = "error";
   verbose([Log("Judging path $path (${path.runtimeType})")]);
 
   try {
-    File file = File(path);
+    String filePath = p.absolute(path.replaceAll("~", getHome()!.path));
+    verbose([Log("File path: $filePath")]);
+    File file = File(filePath);
+
     if (file.existsSync()) {
-      verbose([Log("Found file: ${file.path}")]);
+      verbose([Log("Found file: $filePath")]);
       raw = file.readAsStringSync();
+    } else {
+      throw FileSystemException("File not found", filePath);
     }
   } catch (e) {
     verboseerror("getData file", [Log(e)]);
@@ -97,13 +101,7 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
         if (response.statusCode == 200) {
           verbose([Log("Found file: $uri")]);
           try {
-            try {
-              PlistParser().parse(response.body);
-              raw = response.body;
-            } catch (e) {
-              verboseerror("getData uri PlistParser.parse", [Log(e)]);
-              raw = utf8.decode(response.bodyBytes);
-            }
+            raw = utf8.decode(response.bodyBytes);
           } catch (e) {
             try {
               verboseerror("getData uri utf8.decode", [Log(e)]);
@@ -113,7 +111,7 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
               ArchiveFile? selected;
 
               for (ArchiveFile file in archive.files) {
-                Iterable<RegExpMatch> matches = RegExp(r".*config.*\.plist", caseSensitive: false).allMatches(file.name);
+                Iterable<RegExpMatch> matches = RegExp(fileRegex.pattern, caseSensitive: false).allMatches(file.name);
                 if (matches.isNotEmpty) found.add(file);
               }
 
@@ -124,7 +122,7 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
               log([Log("Found "), Log(found.length, effects: [1]), Log(" matching ${countword(count: found.length, singular: "file")} in archive")]);
               if (found.length > 1) {
                 newline();
-                log([Log("We found "), Log(found.length, effects: [1]), Log(" config.plists. Please select a config.plist to use.")]);
+                log([Log("We found "), Log(found.length, effects: [1]), Log(" files. Please select a files to use.")]);
                 newline();
 
                 for (int i = 0; i < found.length; i++) {
@@ -138,7 +136,7 @@ Future<String?> getData(String path, {required LogMode mode, required bool gui})
                 if (gui) {} else {
                   while (selected == null) {
                     if (i == 0) {
-                      stdout.write("Please type the file path or index of the chosen config.plist. Type q to quit.\nInput   >> ");
+                      stdout.write("Please type the file path or index of the chosen file. Type q to quit.\nInput   >> ");
                     } else {
                       stdout.write("Invalid >> ");
                     }
@@ -249,9 +247,16 @@ String getMacOSVersionForDarwinVersion(String darwin) {
   return "$name $result";
 }
 
+Directory? getHome() {
+  String? home = Platform.isWindows ? Platform.environment['USERPROFILE'] : Platform.environment['HOME'];
+  if (home == null) return null;
+  verbose([Log("Found home: $home")]);
+  return Directory(home);
+}
+
 Directory getDataDirectory() {
-  String home = (Platform.isWindows ? Platform.environment['USERPROFILE'] : Platform.environment['HOME'])!;
-  String path = p.joinAll([home, ".ocplist"]);
+  Directory home = getHome()!;
+  String path = p.joinAll([home.path, ".ocplist"]);
   return Directory(path);
 }
 

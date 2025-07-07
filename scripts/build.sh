@@ -17,9 +17,7 @@ done
 echo "Building OCPlist from $dir..."
 cd "$dir"
 rm -rf "$out"
-rm -rf "$www"
 mkdir -p "$bin"
-mkdir -p "$www"
 mkdir -p "$kernel"
 
 compile() {
@@ -35,6 +33,8 @@ compile kernel "$kernel" dill
 
 if [ "$buildgui" = true ]; then
     echo "Building GUI for web..."
+    rm -rf "$www"
+    mkdir -p "$www"
     cd gui
     flutter build web --base-href /ocplist/
     cp -r build/web/* "$www"

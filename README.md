@@ -48,3 +48,20 @@ oclog <url or file path> [--help] [--verbose] [--force] [--linecount=X]
 Some arguments are the same as the OCPlist usage.
 
 `--linecount=X`: Control how many of the last lines of the log are shown. Defaults to 15. Replace `X` with your chosen amount.
+
+## Downloading Files
+
+OCPlist (and OCLog) can download and process many file types:
+
+- Direct links to the text/XML files
+- Direct links to non-proprietary archives
+    - If multiple files are found, it'll let you select which one to use
+- Direct view links to Google Drive files
+- Direct view links to Pastebin files
+- Direct view links to GitHub files
+- Direct view links to GitHub repos
+- Relative or absolute file paths
+
+I have hopes that these file types will be supported in the future:
+
+- Direct

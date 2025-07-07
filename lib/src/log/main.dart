@@ -224,7 +224,7 @@ OCLog parseLog(String raw) {
 }
 
 Future<OCLog> getLog(String path, {required bool gui}) async {
-  String? raw = await getData(path, mode: LogMode.plist, gui: gui);
+  String? raw = await getData(path, mode: LogMode.plist, gui: gui, fileRegex: RegExp(r"^opencore-\d{4}-\d{2}-\d{2}-\d{6}\.txt$"));
   
   if (raw == null) {
     error([Log("Invalid log file path: $path")], mode: LogMode.log, gui: gui);
