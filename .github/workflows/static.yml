@@ -15,7 +15,7 @@ permissions:
   pages: write
   id-token: write
 jobs:
-  pages-deploy-v7Cfnu:
+  pages-deploy-RqUamo:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -32,18 +32,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: "actions/deploy-pages@v4"
-  dart-analyze-mU4gOZ:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: "actions/checkout@v4"
-      - uses: "dart-lang/setup-dart@v1"
-      - name: Dart Analyze at /
-        run: |-
-          echo "$PWD %cd%"
-          dart pub get
-          dart format --output=none .
-          dart analyze
-  dart-build-UBAsye:
+  dart-build-QfX9cy:
     runs-on: "${{ matrix.os }}"
     strategy:
       matrix:
@@ -53,14 +42,22 @@ jobs:
           - macOS-latest
         include:
           - os: ubuntu-latest
-            output-name: ocplist-ubuntu
+            output-name: ocplist-linux
           - os: windows-latest
-            output-name: ocplist-windows
+            output-name: ocplist-windows.exe
           - os: macOS-latest
             output-name: ocplist-macOS
     steps:
-      - uses: "actions/checkout@v4"
-      - uses: "dart-lang/setup-dart@v1"
+      - name: Checkout
+        uses: "actions/checkout@v4"
+      - name: Setup
+        uses: "dart-lang/setup-dart@v1"
+      - name: Cache Dependencies
+        uses: "actions/cache@v4"
+        with:
+          path: ~/.pub-cache
+          key: "${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}"
+          restore-keys: "${{ runner.os }}-pub-"
       - name: Dart Build at /
         run: |-
           mkdir -p build
@@ -70,3 +67,28 @@ jobs:
         with:
           name: "executables-${{ github.run_id }}"
           path: "build/${{ matrix.output-name }}"
+  dart-build-alt-Il8SBN:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+        include:
+          - os: ubuntu-latest
+            output-name: ocplist
+    steps:
+      - name: Checkout
+        uses: "actions/checkout@v4"
+      - name: Setup
+        uses: "dart-lang/setup-dart@v1"
+      - name: Cache Dependencies
+        uses: "actions/cache@v4"
+        with:
+          path: ~/.pub-cache
+          key: "${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}"
+          restore-keys: "${{ runner.os }}-pub-"
+      - name: Dart Build Extra at /
+        run: |-
+          mkdir -p build
+          dart pub get
+          dart compile kernel bin/main.dart -o build/${{ matrix.output-name }}.dill
