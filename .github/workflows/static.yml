@@ -15,7 +15,7 @@ permissions:
   pages: write
   id-token: write
 jobs:
-  pages-deploy-Blg4II:
+  pages-deploy-vgrWDO:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -32,17 +32,18 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: "actions/deploy-pages@v4"
-  dart-analyze-5ZJMiZ:
+  dart-analyze-Fe2Io2:
     runs-on: ubuntu-latest
     steps:
       - uses: "actions/checkout@v4"
       - uses: "dart-lang/setup-dart@v1"
       - name: Dart Analyze at /
         run: |-
+          echo "$PWD %cd%"
           dart pub get
           dart format --output=none --set-exit-if-changed .
           dart analyze
-  dart-build-eVRhI4:
+  dart-build-UtMcY6:
     runs-on: "${{ matrix.os }}"
     strategy:
       matrix:
@@ -62,6 +63,7 @@ jobs:
       - uses: "dart-lang/setup-dart@v1"
       - name: Dart Build at /
         run: |-
+          mkdir -p build
           dart pub get
           dart compile exe bin/main.dart -o build/${{ matrix.output-name }}
       - uses: "actions/upload-artifact@v4"
