@@ -15,7 +15,7 @@ permissions:
   pages: write
   id-token: write
 jobs:
-  pages-deploy-RqUamo:
+  pages-deploy-CvpmCw:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -32,7 +32,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: "actions/deploy-pages@v4"
-  dart-build-QfX9cy:
+  dart-build-3Kd0BC:
     runs-on: "${{ matrix.os }}"
     strategy:
       matrix:
@@ -65,9 +65,13 @@ jobs:
           dart compile exe bin/main.dart -o build/${{ matrix.output-name }}
       - uses: "actions/upload-artifact@v4"
         with:
-          name: "executables-${{ github.run_id }}"
+          name: "executables-${{ github.run_id }}-${{ matrix.output-name }}"
           path: "build/${{ matrix.output-name }}"
-  dart-build-alt-Il8SBN:
+      - uses: "actions/upload-artifact@v4"
+        with:
+          name: "executables-alt-${{ github.run_id }}-${{ matrix.output-name }}"
+          path: "build/${{ matrix.output-name }}"
+  dart-build-alt-QKEg6O:
     runs-on: ubuntu-latest
     strategy:
       matrix:
