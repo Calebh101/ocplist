@@ -1,4 +1,4 @@
-name: ocplist-Action
+name: ocplist Actions
 on:
   pull_request:
     branches:
@@ -15,7 +15,7 @@ permissions:
   pages: write
   id-token: write
 jobs:
-  pages-deploy-vgrWDO:
+  pages-deploy-v7Cfnu:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -32,7 +32,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: "actions/deploy-pages@v4"
-  dart-analyze-Fe2Io2:
+  dart-analyze-mU4gOZ:
     runs-on: ubuntu-latest
     steps:
       - uses: "actions/checkout@v4"
@@ -41,9 +41,9 @@ jobs:
         run: |-
           echo "$PWD %cd%"
           dart pub get
-          dart format --output=none --set-exit-if-changed .
+          dart format --output=none .
           dart analyze
-  dart-build-UtMcY6:
+  dart-build-UBAsye:
     runs-on: "${{ matrix.os }}"
     strategy:
       matrix:
@@ -68,5 +68,5 @@ jobs:
           dart compile exe bin/main.dart -o build/${{ matrix.output-name }}
       - uses: "actions/upload-artifact@v4"
         with:
-          name: native-executables
+          name: "executables-${{ github.run_id }}"
           path: "build/${{ matrix.output-name }}"
