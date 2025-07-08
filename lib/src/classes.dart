@@ -51,6 +51,7 @@ class UnsupportedConfiguration {
   String getTypeString({String delim = " - "}) {
     switch (type) {
       case UnsupportedConfigurationType.OpcoreSimplify: return ["Prebuilt", "Auto-Tool", "OpCore Simplify"].join(delim);
+      case UnsupportedConfigurationType.OCEfiMaker: return ["Prebuilt", "Auto-Tool", "OC-EFI-Maker"].join(delim);
       case UnsupportedConfigurationType.GeneralConfigurator: return ["Plist Tool", "Configurator"].join(delim);
       case UnsupportedConfigurationType.OCAT: return ["Plist Tool", "Configurator", "OCAT"].join(delim);
       case UnsupportedConfigurationType.OCC: return ["Plist Tool", "Configurator", "OpenCore Configurator"].join(delim);
@@ -78,6 +79,7 @@ enum UnsupportedConfigurationType {
   TopLevelClover,
   Hackintool,
   OldSchema,
+  OCEfiMaker,
 }
 
 enum UnsupportedConfigurationStatus {

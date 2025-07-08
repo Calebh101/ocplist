@@ -4,10 +4,10 @@ A tool for parsing and displaying properties of an OpenCore `config.plist`.
 
 ### OCPlist Features
 
-- Detects config.plists from OpCore Simplify, Olarila, etcetera
+- Detects config.plists from OpCore Simplify, OC-EFI-Maker, Olarila, etcetera
 - Detects config.plists used with configurators, Hackintool, etcetera
 - Detects config.plists with older schemas
-- Detects config.plists not made with OpenCore
+- Detects config.plists not for OpenCore
 - Shows kexts, SSDTs, ACPI patches, kernel patches, blocked kexts, tools, drivers
 - Shows DeviceProperties, boot-args, platform info, emulation, etcetera
 - Tells you if the config.plist still has sample entries
@@ -62,6 +62,8 @@ OCPlist (and OCLog) can download and process many file types:
 - Direct view links to GitHub repos
 - Relative or absolute file paths
 
+"Direct view links" can also be links to view ZIP files, and it will still extract the config.plist from it, as the archive feature is built-in and isn't cancelled with changing the URL.
+
 I have hopes that these file types will be supported in the future:
 
-- Direct
+- Direct view links to Google Drive folders

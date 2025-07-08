@@ -14,7 +14,7 @@ late ArgResults args;
 late bool outputToController;
 List<LogMode> lock = [];
 StreamController controller = StreamController.broadcast();
-String version = "1.0.0A";
+String version = "1.0.0B";
 int? timeout;
 
 enum LogMode {

@@ -66,11 +66,26 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
   }
 
   try {
+    RegExp regexA = RegExp(r'oc-efi-maker', multiLine: true, caseSensitive: false);
+    Iterable matchesA = regexA.allMatches(raw);
+
+    RegExp regexB = RegExp(r'^[ \t]*<data>\n[ \t]*(.+)\n[ \t]*<\/data>$', multiLine: true, caseSensitive: false);
+    Iterable matchesB = regexB.allMatches(raw);
+    int thresholdB = 6;
+
+    if (matchesA.isNotEmpty || matchesB.length >= thresholdB) {
+      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OCEfiMaker, reason: [[Log("Matches to "), Log(regexA.pattern, effects: [1]), Log(": "), Log("${matchesA.length}", effects: [1]), Log( " (threshold of "), Log(1, effects: [1]), Log(")")], [Log("Matches to "), Log(regexB.pattern, effects: [1]), Log(": "), Log("${matchesB.length}", effects: [1]), Log(" (threshold of "), Log(thresholdB, effects: [1]), Log(")")]]));
+    }
+  } catch (e) {
+    verboseerror("unsupportedconfiguration.prebuilt.autotool", [Log(e)]);
+  }
+
+  try {
     RegExp regex = RegExp(r'MaLd0n|olarila', multiLine: true, caseSensitive: false);
     Iterable matches = regex.allMatches(raw);
 
     if (matches.isNotEmpty) {
-      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.Olarila, reason: [[Log("Matches to ${regex.pattern}: "), Log("${matches.length}", effects: [1])]]));
+      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.Olarila, reason: [[Log("Matches to "), Log(regex.pattern, effects: [1]), Log(": "), Log("${matches.length}", effects: [1])]]));
     }
   } catch (e) {
     verboseerror("unsupportedconfiguration.prebuilt.olarila", [Log(e)]);
@@ -91,14 +106,14 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
     }
 
     if (matches > 0) {
-      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.GeneralConfigurator, reason: [[Log("Matches to ${regex.pattern}: "), Log("$matches", effects: [1])]]));
+      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.GeneralConfigurator, reason: [[Log("Matches to "), Log(regex.pattern, effects: [1]), Log(": "), Log("$matches", effects: [1])]]));
     }
   } catch (e) {
     verboseerror("unsupportedconfiguration.configurators", [Log(e)]);
   }
 
   try {
-    double slotNameThreshold = 0.8;
+    double slotNameThreshold = 0.6;
     List properties = getDevProps(plist);
 
     int slotNameCount = properties.where((item) {
@@ -107,6 +122,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
 
     double chance = slotNameCount / properties.length;
     bool match = chance > slotNameThreshold;
+    verbose([Log("Hackintool results: $slotNameCount / ${properties.length} ($match)")]);
 
     if (match) {
       results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.Hackintool, status: UnsupportedConfigurationStatus.warning, reason: [[Log("Hackintool properties found: "), Log("${(chance * 100).round()}%", effects: [1]), Log(" (above threshold of "), Log("${(slotNameThreshold * 100)}%", effects: [1]), Log(")")]]));
@@ -133,10 +149,7 @@ List<UnsupportedConfiguration> findUnsupportedConfigurations(String raw, Map pli
     check(OpenCoreVersion(0, 5, 4), ["Booter", "Quirks", "SignalAppleOS"]);
 
     verbose([Log("Maximum OpenCore version: $max")]);
-
-    if (max < threshold) {
-      results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OldSchema, reason: [[Log("Maximum OpenCore schema version: "), Log("$max", effects: [1])]], status: UnsupportedConfigurationStatus.warning));
-    }
+    if (max < threshold) results.add(UnsupportedConfiguration(type: UnsupportedConfigurationType.OldSchema, reason: [[Log("Maximum OpenCore schema version: "), Log("$max", effects: [1])]], status: UnsupportedConfigurationStatus.warning));
   } catch (e) {
     verboseerror("unsupportedconfiguration.bootloader.schema", [Log(e)]);
   }

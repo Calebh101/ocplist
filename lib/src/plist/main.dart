@@ -48,6 +48,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   Plist plist;
   bool directPlist = false;
   bool useOcValidate = true;
+  int? ocvalidateIssues;
 
   lock.add(LogMode.plist);
   outputToController = alt;
@@ -133,9 +134,9 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
   if (useOcValidate) {
     if (web) {
-      await ocvalidateweb(plist.raw);
+      ocvalidateIssues = await ocvalidateweb(plist.raw);
     } else {
-      await ocvalidate(plist.raw, alt: alt, terminalwidth: terminalwidth);
+      ocvalidateIssues = await ocvalidate(plist.raw, alt: alt, terminalwidth: terminalwidth);
     }
   }
 
@@ -406,7 +407,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     }
 
     title([Log("Boot Arguments (${args.length} ${countword(count: args.length, singular: "arg")})")], overrideTerminalWidth: terminalwidth);
-    print([Log("boot-args: "), Log(variable.replaceAll("\n", "[\\n]"), effects: [1])]);
+    print([Log(variable.replaceAll("\n", "[\\n]"), effects: [1])]);
     print([Log("Present in NVRAM > Delete: "), Log(delete ? "Yes" : "No", effects: [1, delete ? 32 : 31])]);
 
     if (errors.isNotEmpty) {
@@ -666,7 +667,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     }
   }
 
-  List<List<Log>> summaryraw = [countEntries(["Kernel", "Add"], singular: "kext"), countEntries(["ACPI", "Add"], singular: "ACPI", plural: acpiText[1]), countEntries(["UEFI", "Drivers"], singular: "driver"), countEntries(["Misc", "Tools"], singular: "tool"), [Log(unsupportedConfigurations.length, effects: [1]), Log(" ${countword(count: unsupportedConfigurations.length, singular: "issue")}")]].whereType<List<Log>>().toList();
+  List<List<Log>> summaryraw = [countEntries(["Kernel", "Add"], singular: "kext"), countEntries(["ACPI", "Add"], singular: "ACPI", plural: acpiText[1]), countEntries(["UEFI", "Drivers"], singular: "driver"), countEntries(["Misc", "Tools"], singular: "tool"), if (useOcValidate && ocvalidateIssues != null) [Log(ocvalidateIssues, effects: [1]), Log(" ${countword(count: ocvalidateIssues, singular: "issue")}")], [Log(unsupportedConfigurations.length, effects: [1]), Log(" ${countword(count: unsupportedConfigurations.length, singular: "invalid configuration")}")]].whereType<List<Log>>().toList();
   List<Log> summary = [];
 
   for (int i = 0; i < summaryraw.length; i++) {
@@ -771,9 +772,10 @@ Plist parsePlist(String raw) {
   return Plist(raw: raw, json: result);
 }
 
-Future<void> ocvalidate(String plist, {required bool alt, double Function()? terminalwidth}) async {
+Future<int?> ocvalidate(String plist, {required bool alt, double Function()? terminalwidth}) async {
   try {
     title([Log("OCValidate")], overrideTerminalWidth: terminalwidth);
+    int? errors = 0;
     File file = (await getOcValidateFile())!;
     Directory dir = Directory.systemTemp;
     String path = Path.join(dir.path, "config.plist");
@@ -786,14 +788,56 @@ Future<void> ocvalidate(String plist, {required bool alt, double Function()? ter
 
       if (result.exitCode != 0) {
         error([Log("Unable to change ocvalidate permissions: ${result.stderr}")], mode: LogMode.plist, gui: alt);
-        return;
+        return null;
       }
     }
 
     log([Log("Generating OCValidate report...")]);
-    ProcessResult result = await Process.run(file.path, [config.path]);
-    log([Log(result.stdout)]);
+    ProcessResult process = await Process.run(file.path, [config.path]);
+    List<String> lines = process.stdout.toString().split("\n");
+
+    while (lines.last.trim() == "") {
+      lines = lines.sublist(0, lines.length - 1);
+    }
+
+    lines = lines.asMap().entries.map((entry) {
+      int i = entry.key;
+      String item = entry.value;
+
+      if (i <= 0) {
+        return null;
+      } else {
+        if (item.trim() == "" && lines[i - 1].trim() == "") {
+          return null;
+        } else {
+          return item;
+        }
+      }
+    }).whereType<String>().toList();
+
+    for (int i = 0; i < lines.length; i++) {
+      String data = lines[i];
+      RegExp regex = RegExp(r"Found (\d+) issues requiring attention.");
+      RegExpMatch? match = regex.firstMatch(data);
+
+      if (match != null) {
+        errors = int.tryParse(match.group(1) ?? "null");
+        verbose([Log(data)]);
+        log([Log("Found "), Log(errors, effects: [1]), Log(" issues requiring attention.")]);
+      } else {
+        log([Log(data)]);
+      }
+    }
+
+    for (String line in process.stderr.toString().split("\n").where((String item) => item.trim() != "")) {
+      log([Log("err > ", effects: [31]), Log(line, effects: [1, 31])]);
+    }
+
+    int code = process.exitCode;
+    log([Log("OCValidate exited with exit code "), Log(code, effects: [1]), Log(".")]);
+    return errors;
   } catch (e) {
     error([Log(e)], mode: LogMode.plist, gui: alt);
+    return null;
   }
 }
