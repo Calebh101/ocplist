@@ -2,7 +2,6 @@
 
 - Initial version.
 
-
 ## 1.0.0B
 
 - Process OCValidate output and also show the amount of schema issues at the bottom summary.

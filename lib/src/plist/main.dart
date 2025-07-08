@@ -52,6 +52,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
   lock.add(LogMode.plist);
   outputToController = alt;
+  logversion("ocplist");
 
   try {
     if (alt == false) throw Exception();
@@ -74,7 +75,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
   }
 
   List rest = args.rest;
-  String usage = "ocplist (plist: file path, direct URL) [--help] [--verbose] [--force]";
+  String usage = "ocplist (plist: file path, direct URL) [--help] [--verbose] [--force] [--no-ocvalidate]";
 
   if (args["help"] == true || rest.isEmpty) {
     print([Log("Usage: $usage")]);
@@ -87,7 +88,6 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
   verbose([Log("Generating report...")]);
   log([Log.event(LogEvent.resultstart)]);
-  logversion("ocplist");
 
   if (directPlist) {
     plist = parsePlist(rest[0]);

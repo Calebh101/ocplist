@@ -23,7 +23,7 @@ enum LogMode {
 }
 
 void logversion(String mode) {
-  log([Log("Starting ocplist:$mode version $version...")]);;
+  log([Log("OCPlist (ocplist:$mode) version $version")]);
 }
 
 String getOcPlistVersion() {

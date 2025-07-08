@@ -30,6 +30,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
   lock.add(LogMode.log);
   outputToController = alt;
+  logversion("oclog");
 
   try {
     if (alt == false) throw Exception();
@@ -75,7 +76,6 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
 
   verbose([Log("Generating report...")]);
   log([Log.event(LogEvent.resultstart)]);
-  logversion("oclog");
 
   List<String> tools = [];
   List<String> drivers = [];
