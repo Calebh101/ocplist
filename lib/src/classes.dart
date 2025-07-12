@@ -25,6 +25,7 @@ class Log {
   Log.tab() : input = null, effects = [], _tab = true;
   Log.event(this.event) : input = null, effects = [], _tab = false;
   Log.yesNo(bool status, {String? yesText, String? noText, bool reverseColors = false}) : input = (status ? (yesText ?? "Yes") : (noText ?? "No")), effects = [1, (status && reverseColors ? 31 : (status ? 32 : 31))], _tab = false;
+  Log.space() : input = " ", effects = [], _tab = false;
 
   @override
   String toString() {

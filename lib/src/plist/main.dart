@@ -293,7 +293,7 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
               isData = false;
             }
 
-            addlog([Log(key, effects: [1]), Log(": "), Log("${isData ? getHex(input) : input}", effects: [1]), if (isData) ...[Log(" ("), Log(getHex(Uint8List.fromList((input as Uint8List).reversed.toList())), effects: [1]), Log(")")], Log(" ("), Log(getType(input), effects: [1]), Log(")")]);
+            addlog([Log(key, effects: [1]), Log(": "), Log("${isData ? getHex(input) : input}", effects: [1]), if (isData) ...[Log(" ("), Log(getHex(Uint8List.fromList((input as Uint8List).reversed.toList())), effects: [1]), Log(") ("), Log(ByteData.sublistView(input).getInt32(0, Endian.little), effects: [1]), Log(")")], Log(" ("), Log(getType(input), effects: [1]), Log(")")]);
           }
       }
 
@@ -536,6 +536,39 @@ Future<void> main(List<String> arguments, {bool alt = false, bool web = false, d
     ["SystemProductName", "SystemSerialNumber", "ROM", "SystemUUID", "SpoofVendor"].map((dynamic item) => show(item)).toList();
   } catch (e) {
     verboseerror("platforminfo", [Log(e)]);
+  }
+
+  try {
+    title([Log("Picker")], overrideTerminalWidth: terminalwidth);
+    List<String> boot = ["Misc", "Boot"];
+    String delim = " > ";
+
+    void show(List<String> keys) {
+      try {
+        final value = plist.json * keys;
+        log([Log("${keys.join(delim)}: "), value is bool ? Log.yesNo(value) : Log(value, effects: [1]), Log(" ("), Log(getType(value), effects: [1]), Log(")")]);
+      } catch (e) {
+        verboseerror("picker[${keys.join(delim)}]", [Log(e)]);
+      }
+    }
+
+    show([...boot, "ShowPicker"]);
+    show([...boot, "Timeout"]);
+    show([...boot, "PickerMode"]);
+    show([...boot, "PickerAttributes"]);
+    show([...boot, "PickerVariant"]);
+    show(["UEFI", "Output", "DirectGopRendering"]);
+
+    try {
+      List drivers = plist["UEFI"]["Drivers"];
+      Map? driver = drivers.firstWhere((x) => x["Path"].contains("OpenCanopy.efi"));
+      bool enabled = driver?["Enabled"] == true;
+      log([Log(["UEFI", "Drivers", "OpenCanopy.efi"].join(delim)), Log(": "), Log.yesNo(driver != null, yesText: "Present", noText: "Not Present"), Log(", "), Log.yesNo(enabled, yesText: "Enabled", noText: "Disabled")]);
+    } catch (e) {
+      verboseerror("picker.opencanopy", [Log(e)]);
+    }
+  } catch (e) {
+    verboseerror("picker", [Log(e)]);
   }
 
   title([Log("Misc")], overrideTerminalWidth: terminalwidth);
